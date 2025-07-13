@@ -1,23 +1,31 @@
 # File Dataset
-Cloud Blob Storage systems like S3 are often used as a File System. When performing bulk operations, developers need to "de-reference" data frames that contain references to s3 data.  
+Cloud Blob Storage systems like S3 are often used as a File System. Developers want the ability to download the files from s3, process them to generate new files, then to upload these new files to a new s3 prefix as a transformed dataset.
 
-We want to provide a workflow that makes the read and write steps to cloud storage clear and explicit.
+A file dataset is a pandas DataFrames where each column correspond to file names (e.g. image.mha), and each row for that column has an s3 url pointing to a file (e.g. s3://my-bucket/large_3d_image.mha).
 
-The user provides:
+The file dataset is efficient when the file size is relatively large, where each row may contain one or more 100MB+ images or other blob formats. The file dataset is also convenient for smaller files because a file is intuitive to developers. 
 
-* data pipelines as python function that operates on local files. This type of pipeline is common in image processing workflows.
-* a data frame where columns correspond to file names, and their values corresponed to s3 urls such as s3://my-bucket/large_image.mha
+Managing all these files can be cumbersome and subtle; the `file_dataset` library exists to simplify these s3 operations.
 
-The file_dataset then provides functionality to read these files to local storage or as blobs in memory, with a focus on simplicity:
+To use the `file_dataset` library, users provide:
 
-* Core operations are *eager*. When you call `file_dataset.reader(dataframe).into_temp_dir()` that immediately copies the data, or when you call `file_dataset.write_files()` that copies the files into s3 immediately.
-* User may call a Pipeline that reads data locally, invokes their function, and then uploads the outputs to s3. This pipeline can then be called for each row a pandas dataframe.
+* a python function that operates on local files, taking an input directory and output directory. This type of pipeline is common in image processing pipelines.
+* a file dataset where columns correspond to files and rows correspond to s3 urls.
+
+The `file_dataset` library then provides functionality to read these s3 files at scale, into either local storage or as blobs in memory, as well as upload files from local storage back to s3. The `file_dataset` library has a focus on simplicity:
+
+* Core operations are *eager* and s3 GETs/PUTs are explicit. When you call `file_dataset.reader(dataframe).into_temp_dir()` that copies the data to the temp dir, or when you call `file_dataset.write_files()` that copies the files into s3 immediately.
+* `file_dataset` deals only in Bytes; serialization/deserialization is left up to the user.
+* User may create a `file_dataset.Pipeline` that reads data locally, invokes their user-defined function with an input and output dir, and then uploads the outputs to s3. This pipeline can then be called for each row in a file dataset represented as a pandas dataframe.
 * Ray Data integration is provided to simplify large-scale dataset processing.
+    * Mapping from one file dataset to another can be achieved with `ray.data.Dataset.map_batches` and a file dataset pipeline.
+    * file datasets can be loaded into cluster memory for training as a custom ray data source, which allows them to be consumed directly or converted to a different format as a preprocessing step.
 
 Differences from other libraries:
 
-* Unlike [s3fs](https://s3fs.readthedocs.io/en/latest/) users will have data explicitly read from s3 or written to s3 in the pipeline, without blurring the distinction between local and remote data storage.
-* Unlike LanceDB this library does not create a persistent data format. It mainly provides operations and attempts to reuse existing data formats (ie "file system" path structure)
+* Unlike [s3fs](https://s3fs.readthedocs.io/en/latest/) users will have data explicitly read from s3 or written to s3 in the pipeline, without blurring the distinction between local and remote data storage. (Similar for s3 mountpoint).
+* Unlike [s3 mountpoint](https://github.com/awslabs/mountpoint-s3?tab=readme-ov-file) there is no custom setup logic to run prior to running the pipeline; standalone boto3 features are used in this library.
+* Unlike [LanceDB](https://lancedb.github.io/lancedb/) this library does not create a new persistent data format. Instead this library focuses on providing an adapter to transform existing de-facto formats like "file dataset" into more standardized formats.
 
 
 ## Example usage
