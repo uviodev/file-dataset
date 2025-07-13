@@ -18,6 +18,22 @@ The library provides:
 - **vs s3 mountpoint**: No custom setup required; uses standard boto3 features
 - **vs LanceDB**: Doesn't create a new data format; focuses on adapting existing "file dataset" formats
 
+## Development workflow
+To develop a new feature:
+
+1. Read from tasks.md to find the next task to do, which is not yet done. Copy that task into `feature_plan.md`.
+2. Plan the functionality to be added and update `feature_plan.md` accordingly.
+    * Taking into account understanding of the codebase and README.md, plan the code changes to make at a high level. 
+    * Think of a few high level test cases. Add these to a section called `testing`
+3. Implement the feature using red-green refactor loop.
+    a. Add a simple test for the code. Run the test and confirm it is failing due to code within the file_dataset library.
+    b. Implement a code change to make the test pass.
+    c. Run the linter to ensure there are no basic mistakes
+    d. Rerun the failing test to make sure it passes; continue changing the code until it passes.
+    e. Confirm all tests pass (not just the previously failing one); fix any failing ones.
+    f. Repeat the loop by adding a new test and then going through each instruction.
+
+
 ## Development Commands
 The project uses the `uv` command. Prepend typical commands with `uv run` such as `uv run pytest` or `uv run python`.
 
@@ -85,9 +101,17 @@ The library provides several key components:
 ### Implementation Guidelines
 
 When implementing features:
+- Focus on simple and clear code
 - Always support both S3 (`s3://bucket/path`) and local paths
 - Use context managers for temp directory cleanup
 - Ensure thread-safety for shared resources (like S3 clients)
 - Make components serializable for distributed processing
 - Handle failures gracefully (drop rows, don't crash pipelines)
 - Keep user functions independent of file-dataset internals
+- Always make sure linting checks pass
+- Ensure good logging practices
+
+
+When implementing tests:
+- Rely on the moto library to mock all s3 calls
+- use small files for testing; all files should be less than 1kb in size
