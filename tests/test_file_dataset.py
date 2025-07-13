@@ -1,4 +1,3 @@
-import pytest
 from file_dataset import __version__
 
 

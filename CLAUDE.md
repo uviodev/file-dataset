@@ -52,6 +52,53 @@ uv run pytest tests/ --lf -v
 
 Once the tests are passing, rerun all tests to confirm nothing else is broken.
 
+### Linting and Formatting
+
+The project uses `ruff` for linting and formatting with extensive security and docstring checks:
+
+```bash
+# Run ALL linting checks at once (recommended)
+uv run lint
+
+# Or run individual checks:
+# Run linter
+uv run ruff check src/ tests/
+
+# Run linter with auto-fix
+uv run ruff check --fix src/ tests/
+
+# Format code
+uv run ruff format src/ tests/
+
+# Run security checks with bandit
+uv run bandit -r src/
+
+# Run type checking
+uv run mypy src/
+```
+
+### Pre-commit Hooks
+
+Install and run pre-commit hooks to ensure code quality:
+
+```bash
+# Install pre-commit hooks
+uv run pre-commit install
+
+# Run all hooks manually
+uv run pre-commit run --all-files
+
+# Run specific hook
+uv run pre-commit run ruff --all-files
+```
+
+The pre-commit configuration includes:
+- **Ruff**: Linting and formatting with security rules (S), docstring checks (D), and many other quality checks
+- **Bandit**: Additional security vulnerability scanning
+- **Safety**: Checks dependencies for known security vulnerabilities
+- **MyPy**: Static type checking
+- **Various checks**: Trailing whitespace, YAML validation, merge conflicts, etc.
+
 ## Architecture & Structure
 
 ### Project Layout
