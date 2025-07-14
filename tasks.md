@@ -205,7 +205,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 
 
 ## Task 11: Test Pipeline with local Ray data integration
-**Status**: Not started
+**Status**: ✅ Completed
 **Description**: Verify Pipeline class works correctly with Ray's map_batches functionality for distributed processing.
 
 **Requirements**:

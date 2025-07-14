@@ -1,38 +1,40 @@
-## Task 10: Implement reader support for PyArrow blob table
+# Task 11: Test Pipeline with local Ray data integration
 
-**Description**: Add functionality to load file contents directly into PyArrow tables as binary data.
+**Status**: In Progress
+**Description**: Verify Pipeline class works correctly with Ray's map_batches functionality for distributed processing.
 
-**Requirements**:
-- Implement `.into_blob_table(head: int|None)` method on Reader and FileDataFrameReader.
-    - If the user passes head=N then only the first N rows is converted into the table; default is None so return the whole table
-    - This method is provided for debugging
-- Load file contents into memory as binary data.
-- Return PyArrow table with schema: `{id: pa.string(), filename: pa.binary()}` for each file column
-- Support both local and S3 files
-- Add `into_blob_table(head: int|None)` for the single-row Reader but have it raise a NotImplementedError
+## Requirements
+- Create tests using Ray's `map_batches` with Pipeline objects
+- Test with pandas batch format
+- Verify distributed execution across multiple workers
+- Test with various batch sizes and concurrency settings
+- Ensure proper resource management (memory, disk space)
 
-## Code changes needed:
+## Testing
+- Test Ray dataset creation from CSV with file URLs
+- Test Pipeline execution with Ray's map_batches
+- Test scaling with different concurrency levels (keep the concurrency levels small though for unit testing)
+- Test resource cleanup after Ray jobs complete
+- Test error handling in distributed environment
 
-1. **Modify `src/file_dataset/core.py`**:
-   - Add `into_blob_table(head: int|None = None)` method to the `Reader` class that raises NotImplementedError
-   - Add `into_blob_table(head: int|None = None)` method to the `FileDataFrameReader` class
+## Implementation Plan
 
-2. **Implementation details**:
-   - The method should iterate through the DataFrame rows (up to `head` limit if specified)
-   - For each row, download/read the files to get their binary content
-   - Create PyArrow table with `id: pa.string()` and one column per file with `pa.binary()` type
-   - Handle both local and S3 files by using the existing `into_temp_dir()` functionality
-   - Drop failed rows and log errors (similar to `into_size_table()`)
+Based on the existing codebase structure and pipeline implementation, I need to:
 
-3. **Schema structure**:
-   - `id` column: string containing the row ID
-   - File columns: each file column from the DataFrame becomes a binary column in the table
+1. **Understand current Pipeline implementation**: Review how Pipeline works with pandas DataFrames
+2. **Set up Ray integration tests**: Create tests that use Ray's map_batches with Pipeline objects
+3. **Test pandas batch format**: Ensure Pipeline can handle pandas DataFrames passed from Ray
+4. **Test distributed execution**: Verify Pipeline works across multiple Ray workers
+5. **Test resource management**: Ensure temp directories and memory are properly cleaned up
+6. **Test error handling**: Verify graceful failure handling in distributed environment
 
-## Testing:
-- Test blob table creation with small files (< 1KB as per guidelines)
-- Test mixed local and S3 sources
-- Test PyArrow table schema and binary data integrity
-- Test memory usage with multiple files
-- Test head parameter functionality
-- Test error handling for missing files
-- Test NotImplementedError for single-row Reader
+## Code Changes Needed
+
+1. **Test file creation**: Create a new test file specifically for Ray integration
+2. **Pipeline serialization verification**: Ensure Pipeline objects can be pickled/unpickled for Ray
+3. **Batch processing tests**: Test various batch sizes and concurrency levels
+4. **Resource cleanup tests**: Verify temp directories are cleaned up across workers
+
+## Testing Strategy
+
+The tests will be limited to small concurrency levels and small file sizes (< 1KB) as per project guidelines. I'll use moto for S3 mocking and ensure all tests pass the existing linting requirements.
