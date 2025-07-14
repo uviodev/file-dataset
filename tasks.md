@@ -223,7 +223,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test error handling in distributed environment
 
 ## Task 12: Implement custom Ray data source for blob tables
-**Status**: Not started
+**Status**: ✅ Completed
 **Description**: Create Ray data source that efficiently loads file datasets into cluster memory as blob tables.
 
 **Requirements**:
@@ -235,7 +235,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - On the implementation of read_file_dataset(), create custom Ray Datasource named FileDataFrameAsBlobDatasource. Then read it usin g[ray.data.read_datasource](https://docs.ray.io/en/latest/data/api/doc/ray.data.read_datasource.html)
     - Extend ray.data.Datasource` (do NOT extend file based datasource as the datasource here itself is a DataFrame that's already been loaded).
     - Define `FileDataFrameAsBlobDatasource.__init__` to take in (file_dataframe: pd.DataFrame, batch_size, and options) per above. The file_dataframe should be a valid file dataframe as defined in pipeline.py
-    - Implement `estimate_inmemory_data_size` with `into_size_table()` for memory estimation on first batch (do not call this function for the whole dataset but use self.dataframe.head(batch_size))`
+    - Implement `estimate_inmemory_data_size` with `into_size_table()` for memory estimation on first batch (do not call this function for the whole dataset but use self.dataframe.head(batch_size))`; multiply this size by the number of batches in the dataset (include fractional final batch)
     - Implement `get_read_tasks(parallelism: int)`: Create one read task that will yield `batch_size` rows for each dataset that returns `into_blob_table()` for each dataframe. Ignore the parallelism command and require the user has specified `self.batch_size` as the blob tables can out-of-memory if they exceed `batch_size` rows. Provide documentation of this behavior in the docstring.
 
 NOTE: no need to implement a Datasink as the user may write the dataset here to a different format like parquet, or use map_batches to write data to s3 on a rolling basis during processing

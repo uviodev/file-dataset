@@ -1,40 +1,45 @@
-# Task 11: Test Pipeline with local Ray data integration
+# Task 12: Implement custom Ray data source for blob tables
 
-**Status**: In Progress
-**Description**: Verify Pipeline class works correctly with Ray's map_batches functionality for distributed processing.
+**Status**: Not started
+**Description**: Create Ray data source that efficiently loads file datasets into cluster memory as blob tables.
 
 ## Requirements
-- Create tests using Ray's `map_batches` with Pipeline objects
-- Test with pandas batch format
-- Verify distributed execution across multiple workers
-- Test with various batch sizes and concurrency settings
-- Ensure proper resource management (memory, disk space)
+- Implement `file_dataset.ray.read_file_dataset(file_dataframe, batch_size, options)` where file_datasource.Options provides boto3 configuration
+    - file_dataframe is a pandas dataframe, that has an id column and certain file columns
+    - the ray dataset schema should be that of `into_blob_table()`. The columns will be the file columns as well as id. The values will be the file contents.
+    - the ray dataset will be potentially 1000s-1,000,000,000s of times larger than `file_dataframe` as in production each row in the file dataframe will have potentially several s3 urls that expand to large objects
+- Raise ValueError if dataframe does not have an `id` column that is unique
+- On the implementation of read_file_dataset(), create custom Ray Datasource named FileDataFrameAsBlobDatasource. Then read it usin g[ray.data.read_datasource](https://docs.ray.io/en/latest/data/api/doc/ray.data.read_datasource.html)
+    - Extend ray.data.Datasource` (do NOT extend file based datasource as the datasource here itself is a DataFrame that's already been loaded).
+    - Define `FileDataFrameAsBlobDatasource.__init__` to take in (file_dataframe: pd.DataFrame, batch_size, and options) per above. The file_dataframe should be a valid file dataframe as defined in pipeline.py
+    - Implement `estimate_inmemory_data_size` with `into_size_table()` for memory estimation on first batch (do not call this function for the whole dataset but use self.dataframe.head(batch_size))`
+    - Implement `get_read_tasks(parallelism: int)`: Create one read task that will yield `batch_size` rows for each dataset that returns `into_blob_table()` for each dataframe. Ignore the parallelism command and require the user has specified `self.batch_size` as the blob tables can out-of-memory if they exceed `batch_size` rows. Provide documentation of this behavior in the docstring.
+
+NOTE: no need to implement a Datasink as the user may write the dataset here to a different format like parquet, or use map_batches to write data to s3 on a rolling basis during processing
 
 ## Testing
-- Test Ray dataset creation from CSV with file URLs
-- Test Pipeline execution with Ray's map_batches
-- Test scaling with different concurrency levels (keep the concurrency levels small though for unit testing)
-- Test resource cleanup after Ray jobs complete
-- Test error handling in distributed environment
+- Test file_dataset.ray.read_file_dataset() with integration testing that the expected rows return the relevant file content
+- Test zero-copy operations when available
+- Add an integration test with a pseudo-realistic dataset with 1000 rows (keeping individual files < 1KB)
 
 ## Implementation Plan
 
-Based on the existing codebase structure and pipeline implementation, I need to:
+Based on the existing codebase structure and Ray requirements, I need to:
 
-1. **Understand current Pipeline implementation**: Review how Pipeline works with pandas DataFrames
-2. **Set up Ray integration tests**: Create tests that use Ray's map_batches with Pipeline objects
-3. **Test pandas batch format**: Ensure Pipeline can handle pandas DataFrames passed from Ray
-4. **Test distributed execution**: Verify Pipeline works across multiple Ray workers
-5. **Test resource management**: Ensure temp directories and memory are properly cleaned up
-6. **Test error handling**: Verify graceful failure handling in distributed environment
+1. **Understand existing code structure**: Review current reader implementations and pipeline code
+2. **Create ray submodule**: Create `src/file_dataset/ray/__init__.py` with the public API
+3. **Implement FileDataFrameAsBlobDatasource**: Custom Ray datasource extending `ray.data.Datasource`
+4. **Implement read_file_dataset function**: Public API that validates input and creates Ray dataset
+5. **Write comprehensive tests**: Integration tests with moto for S3 mocking
 
 ## Code Changes Needed
 
-1. **Test file creation**: Create a new test file specifically for Ray integration
-2. **Pipeline serialization verification**: Ensure Pipeline objects can be pickled/unpickled for Ray
-3. **Batch processing tests**: Test various batch sizes and concurrency levels
-4. **Resource cleanup tests**: Verify temp directories are cleaned up across workers
+1. **New module structure**: Create `src/file_dataset/ray/` directory with proper `__init__.py`
+2. **Custom datasource implementation**: Implement `FileDataFrameAsBlobDatasource` class
+3. **Public API function**: Implement `read_file_dataset()` with validation
+4. **Test file creation**: Create comprehensive tests for the Ray integration
+5. **Documentation**: Add docstrings following Google convention
 
 ## Testing Strategy
 
-The tests will be limited to small concurrency levels and small file sizes (< 1KB) as per project guidelines. I'll use moto for S3 mocking and ensure all tests pass the existing linting requirements.
+The tests will use small file sizes (< 1KB) and moto for S3 mocking. I'll test with pseudo-realistic datasets while keeping individual files small as per project guidelines.
