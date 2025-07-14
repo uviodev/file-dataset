@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
+import pyarrow as pa
 
 from .exceptions import FileDatasetError
 from .options import Options
@@ -172,6 +173,17 @@ class Reader:
                 raise FileDatasetError(file_errors, "Failed to copy some files")
 
             yield temp_dir
+
+    def into_size_table(self, head: int | None = None) -> pa.Table:
+        """Create PyArrow table with file sizes.
+
+        Args:
+            head: Limit to first N rows (not applicable for single Reader)
+
+        Raises:
+            NotImplementedError: Size table not supported for single-row Reader
+        """
+        raise NotImplementedError("Size table not supported for single-row Reader")
 
 
 def reader(
@@ -560,3 +572,155 @@ class FileDataFrameReader:
                 {"all_rows": "All rows failed to process"},
                 "All rows failed. Check error logs for details.",
             )
+
+    def _get_file_size(self, file_path: str) -> int:
+        """Get file size for local or S3 file.
+
+        Args:
+            file_path: Path to file (local or S3 URL)
+
+        Returns:
+            File size in bytes
+
+        Raises:
+            FileNotFoundError: If file doesn't exist
+            ValueError: If S3 URL is invalid or options missing
+            Exception: For other errors accessing file
+        """
+        if _is_s3_url(file_path):
+            if self.options is None:
+                msg = "No S3 options"
+                raise ValueError(msg)
+
+            bucket, key = _parse_s3_url(file_path)
+            if not bucket or not key:
+                msg = "Invalid S3 URL"
+                raise ValueError(msg)
+
+            response = self.options.s3_client.head_object(Bucket=bucket, Key=key)
+            return response["ContentLength"]
+        return Path(file_path).stat().st_size
+
+    def _process_row_for_sizes(
+        self, row_id: str, row_dict: dict
+    ) -> dict[str, str | int]:
+        """Process a single row to collect file sizes.
+
+        Args:
+            row_id: Row identifier for logging
+            row_dict: Row data excluding id column
+
+        Returns:
+            Dictionary with row_data and any file errors
+        """
+        row_data = {"id": row_id}
+        file_errors = {}
+
+        for filename, file_path in row_dict.items():
+            if file_path is None:
+                continue  # Skip None values (optional files)
+
+            try:
+                file_size = self._get_file_size(str(file_path))
+                row_data[filename] = file_size
+            except (FileNotFoundError, ValueError) as e:
+                file_errors[filename] = str(e)
+            except Exception as e:  # noqa: BLE001
+                file_errors[filename] = f"Failed to get file size: {e}"
+
+        # Log errors if any
+        if file_errors:
+            if len(row_data) > 1:  # Has some successful files
+                logger.warning(
+                    "Some files failed for row %s. File errors: %s",
+                    row_id,
+                    file_errors,
+                )
+            else:
+                logger.warning(
+                    "Failed to get sizes for any files in row %s. File errors: %s",
+                    row_id,
+                    file_errors,
+                )
+
+        return row_data
+
+    def _build_size_table_schema(self, result_df: pd.DataFrame) -> pa.Schema:
+        """Build PyArrow schema for size table.
+
+        Args:
+            result_df: DataFrame with results
+
+        Returns:
+            PyArrow schema
+        """
+        schema_fields = [("id", pa.string())]
+        for col in result_df.columns:
+            if col != "id":
+                schema_fields.append((col, pa.int64()))
+        return pa.schema(schema_fields)
+
+    def into_size_table(self, head: int | None = None) -> pa.Table:
+        """Create PyArrow table containing file size metadata.
+
+        Args:
+            head: Limit to first N rows of DataFrame, None for all rows
+
+        Returns:
+            PyArrow table with schema {id: string, filename: int64} where
+            filename columns contain file sizes in bytes
+
+        Raises:
+            FileDatasetError: If all rows fail to process
+        """
+        # Limit rows if head parameter specified
+        dataframe = self.dataframe.head(head) if head is not None else self.dataframe
+
+        total_rows = len(dataframe)
+        if total_rows == 0:
+            # Return empty table with correct schema
+            schema = pa.schema([("id", pa.string())])
+            return pa.table({}, schema=schema)
+
+        successful_rows = []
+
+        for idx, row in dataframe.iterrows():
+            # Get row identifier for logging
+            row_id = row.get("id", str(idx))
+
+            # Convert row to dict, excluding 'id' column if present
+            row_dict = row.to_dict()
+            if "id" in row_dict:
+                del row_dict["id"]
+
+            try:
+                row_data = self._process_row_for_sizes(row_id, row_dict)
+
+                # If this row had any successful file size retrievals, include it
+                if len(row_data) > 1:  # More than just 'id'
+                    successful_rows.append(row_data)
+
+            except Exception as e:  # noqa: BLE001
+                # Log unexpected errors
+                logger.warning("Unexpected error processing row %s: %s", row_id, e)
+                continue
+
+        # If all rows failed, raise an error
+        if not successful_rows and total_rows > 0:
+            raise FileDatasetError(
+                {"all_rows": "All rows failed to process"},
+                "All rows failed. Check error logs for details.",
+            )
+
+        # Build PyArrow table from successful rows
+        if not successful_rows:
+            # Return empty table with just id column
+            schema = pa.schema([("id", pa.string())])
+            return pa.table({}, schema=schema)
+
+        # Convert to DataFrame then to PyArrow table
+        result_df = pd.DataFrame(successful_rows)
+        schema = self._build_size_table_schema(result_df)
+
+        # Convert to PyArrow table with explicit schema
+        return pa.table(result_df, schema=schema)

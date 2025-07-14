@@ -166,7 +166,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 
 
 ## Task 9: Implement reader support for PyArrow size table
-**Status**: Not started
+**Status**: ✅ Completed
 **Description**: Add functionality to create PyArrow tables containing file size metadata without downloading the actual files.
 
 **Requirements**:
