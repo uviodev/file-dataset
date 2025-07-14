@@ -143,7 +143,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 
 
 ## Task 8b: Implement Pipeline class
-**Status**: Not started
+**Status**: ✅ Completed
 **Description**: Create Pipeline class that combines read → process → write workflow for batch processing of file datasets.
 
 **Requirements**:

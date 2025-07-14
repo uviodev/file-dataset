@@ -11,5 +11,13 @@ except (ImportError, PackageNotFoundError):
 from .core import reader, write_files
 from .exceptions import FileDatasetError
 from .options import Options
+from .pipeline import Pipeline
 
-__all__ = ["FileDatasetError", "Options", "__version__", "reader", "write_files"]
+__all__ = [
+    "FileDatasetError",
+    "Options",
+    "Pipeline",
+    "__version__",
+    "reader",
+    "write_files",
+]
