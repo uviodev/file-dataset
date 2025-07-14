@@ -39,7 +39,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test optional output (None value in output map) does not trigger
 
 ## Task 3: Implement simple Options class with S3 client caching
-**Status**: Not started
+**Status**: ✅ Completed
 **Description**: Create Options class to manage S3 credentials and client creation with thread-safe caching.
 
 **Requirements**:
