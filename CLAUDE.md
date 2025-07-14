@@ -21,18 +21,21 @@ The library provides:
 ## Development workflow
 To develop a new feature:
 
-1. Read from tasks.md to find the next task to do, which is not yet done. Copy that task into `feature_plan.md`.
-2. Plan the functionality to be added and update `feature_plan.md` accordingly.
+1. Read from tasks.md to find the next task to do, which is not yet done.
+2. Erase everything in feature_plan.md.
+3. Copy the task in progress (from step 1) into `feature_plan.md`.
+4. Plan the functionality to be added and update `feature_plan.md` accordingly.
     * Taking into account understanding of the codebase and README.md, plan the code changes to make at a high level. 
     * Think of a few high level test cases. Add these to a section called `testing`
-3. Implement the feature using red-green refactor loop.
+5. Ask any clarifying questions. Only continue once questions are answered.
+6. Implement the feature using red-green refactor loop.
     a. Add a simple test for the code. Run the test and confirm it is failing due to code within the file_dataset library.
     b. Implement a code change to make the test pass.
     c. Run the linter to ensure there are no basic mistakes
     d. Rerun the failing test to make sure it passes; continue changing the code until it passes.
     e. Confirm all tests pass (not just the previously failing one); fix any failing ones.
     f. Repeat the loop by adding a new test and then going through each instruction.
-
+7. Update any documentation in the src/ folder with hints or tips about the software usage.
 
 ## Development Commands
 The project uses the `uv` command. Prepend typical commands with `uv run` such as `uv run pytest` or `uv run python`.
