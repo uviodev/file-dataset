@@ -185,7 +185,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test PyArrow table schema and data types
 
 ## Task 10: Implement reader support for PyArrow blob table
-**Status**: Not started
+**Status**: ✅ Completed
 **Description**: Add functionality to load file contents directly into PyArrow tables as binary data.
 
 **Requirements**:

@@ -185,6 +185,17 @@ class Reader:
         """
         raise NotImplementedError("Size table not supported for single-row Reader")
 
+    def into_blob_table(self, head: int | None = None) -> pa.Table:
+        """Create PyArrow table with file contents as binary data.
+
+        Args:
+            head: Limit to first N rows (not applicable for single Reader)
+
+        Raises:
+            NotImplementedError: Blob table not supported for single-row Reader
+        """
+        raise NotImplementedError("Blob table not supported for single-row Reader")
+
 
 def reader(
     *,
@@ -721,6 +732,158 @@ class FileDataFrameReader:
         # Convert to DataFrame then to PyArrow table
         result_df = pd.DataFrame(successful_rows)
         schema = self._build_size_table_schema(result_df)
+
+        # Convert to PyArrow table with explicit schema
+        return pa.table(result_df, schema=schema)
+
+    def _get_file_content(self, file_path: str) -> bytes:
+        """Get file content for local or S3 file.
+
+        Args:
+            file_path: Path to file (local or S3 URL)
+
+        Returns:
+            File content as bytes
+
+        Raises:
+            FileNotFoundError: If file doesn't exist
+            ValueError: If S3 URL is invalid or options missing
+            Exception: For other errors accessing file
+        """
+        if _is_s3_url(file_path):
+            if self.options is None:
+                msg = "No S3 options"
+                raise ValueError(msg)
+
+            bucket, key = _parse_s3_url(file_path)
+            if not bucket or not key:
+                msg = "Invalid S3 URL"
+                raise ValueError(msg)
+
+            response = self.options.s3_client.get_object(Bucket=bucket, Key=key)
+            return response["Body"].read()
+        return Path(file_path).read_bytes()
+
+    def _process_row_for_blobs(
+        self, row_id: str, row_dict: dict
+    ) -> dict[str, str | bytes]:
+        """Process a single row to collect file contents as binary data.
+
+        Args:
+            row_id: Row identifier for logging
+            row_dict: Row data excluding id column
+
+        Returns:
+            Dictionary with row_data and any file errors
+        """
+        row_data = {"id": row_id}
+        file_errors = {}
+
+        for filename, file_path in row_dict.items():
+            if file_path is None:
+                continue  # Skip None values (optional files)
+
+            try:
+                file_content = self._get_file_content(str(file_path))
+                row_data[filename] = file_content
+            except (FileNotFoundError, ValueError) as e:
+                file_errors[filename] = str(e)
+            except Exception as e:  # noqa: BLE001
+                file_errors[filename] = f"Failed to get file content: {e}"
+
+        # Log errors if any
+        if file_errors:
+            if len(row_data) > 1:  # Has some successful files
+                logger.warning(
+                    "Some files failed for row %s. File errors: %s",
+                    row_id,
+                    file_errors,
+                )
+            else:
+                logger.warning(
+                    "Failed to get content for any files in row %s. File errors: %s",
+                    row_id,
+                    file_errors,
+                )
+
+        return row_data
+
+    def _build_blob_table_schema(self, result_df: pd.DataFrame) -> pa.Schema:
+        """Build PyArrow schema for blob table.
+
+        Args:
+            result_df: DataFrame with results
+
+        Returns:
+            PyArrow schema
+        """
+        schema_fields = [("id", pa.string())]
+        for col in result_df.columns:
+            if col != "id":
+                schema_fields.append((col, pa.binary()))
+        return pa.schema(schema_fields)
+
+    def into_blob_table(self, head: int | None = None) -> pa.Table:
+        """Create PyArrow table containing file contents as binary data.
+
+        Args:
+            head: Limit to first N rows of DataFrame, None for all rows
+
+        Returns:
+            PyArrow table with schema {id: string, filename: binary} where
+            filename columns contain file contents as binary data
+
+        Raises:
+            FileDatasetError: If all rows fail to process
+        """
+        # Limit rows if head parameter specified
+        dataframe = self.dataframe.head(head) if head is not None else self.dataframe
+
+        total_rows = len(dataframe)
+        if total_rows == 0:
+            # Return empty table with correct schema
+            schema = pa.schema([("id", pa.string())])
+            return pa.table({"id": []}, schema=schema)
+
+        successful_rows = []
+
+        for idx, row in dataframe.iterrows():
+            # Get row identifier for logging
+            row_id = row.get("id", str(idx))
+
+            # Convert row to dict, excluding 'id' column if present
+            row_dict = row.to_dict()
+            if "id" in row_dict:
+                del row_dict["id"]
+
+            try:
+                row_data = self._process_row_for_blobs(row_id, row_dict)
+
+                # If this row had any successful file content retrievals, include it
+                if len(row_data) > 1:  # More than just 'id'
+                    successful_rows.append(row_data)
+
+            except Exception as e:  # noqa: BLE001
+                # Log unexpected errors
+                logger.warning("Unexpected error processing row %s: %s", row_id, e)
+                continue
+
+        # If all rows failed, raise an error
+        if not successful_rows and total_rows > 0:
+            raise FileDatasetError(
+                {"all_rows": "All rows failed to process"},
+                "All rows failed. Check error logs for details.",
+            )
+
+        # Build PyArrow table from successful rows
+        if not successful_rows:
+            # Return empty table with just id column
+            schema = pa.schema([("id", pa.string())])
+            return pa.table({"id": []}, schema=schema)
+
+        # Convert to DataFrame then to PyArrow table
+        result_df = pd.DataFrame(successful_rows)
+        schema = self._build_blob_table_schema(result_df)
 
         # Convert to PyArrow table with explicit schema
         return pa.table(result_df, schema=schema)
