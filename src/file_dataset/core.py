@@ -1,5 +1,6 @@
 """Core file dataset operations."""
 
+import logging
 import re
 import shutil
 import tempfile
@@ -7,8 +8,12 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
+import pandas as pd
+
 from .exceptions import FileDatasetError
 from .options import Options
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_s3_url(url: str) -> tuple[str, str] | None:
@@ -166,16 +171,37 @@ class Reader:
             yield temp_dir
 
 
-def reader(*, row: dict[str, str | Path], options: Options | None = None) -> Reader:
-    """Create a Reader instance for the given files.
+def reader(
+    *,
+    row: dict[str, str | Path] | None = None,
+    dataframe: pd.DataFrame | None = None,
+    options: Options | None = None,
+) -> "Reader | FileDataFrameReader":
+    """Create a Reader instance for the given files or DataFrame.
 
     Args:
         row: Dictionary mapping filenames to their source paths (keyword-only)
+        dataframe: DataFrame where each row contains files to process (keyword-only)
         options: Optional Options instance for S3 operations (keyword-only)
 
     Returns:
-        Reader instance
+        Reader or FileDataFrameReader instance
+
+    Raises:
+        ValueError: If both row and dataframe are provided, or if neither is provided
     """
+    # Check mutual exclusivity
+    if row is not None and dataframe is not None:
+        msg = "Cannot specify both 'row' and 'dataframe' arguments"
+        raise ValueError(msg)
+
+    if row is None and dataframe is None:
+        msg = "Must specify either 'row' or 'dataframe' argument"
+        raise ValueError(msg)
+
+    # Return appropriate reader
+    if dataframe is not None:
+        return FileDataFrameReader(dataframe, options)
     return Reader(row, options)
 
 
@@ -283,3 +309,67 @@ def write_files(
         raise FileDatasetError(copy_errors, "Failed to copy some files")
 
     return result
+
+
+class FileDataFrameReader:
+    """Handles reading files from DataFrames with row-level error handling."""
+
+    def __init__(self, dataframe: pd.DataFrame, options: Options | None = None) -> None:
+        """Initialize FileDataFrameReader with a DataFrame.
+
+        Args:
+            dataframe: DataFrame where each row represents files to process
+            options: Optional Options instance for S3 operations
+        """
+        self.dataframe = dataframe
+        self.options = options
+
+    def into_temp_dir(self) -> Generator[Path, None, None]:
+        """Yield temporary directories for each successful row in the DataFrame.
+
+        Yields:
+            Path to temporary directory for each successful row
+
+        Raises:
+            FileDatasetError: If all rows fail to process
+        """
+        total_rows = len(self.dataframe)
+        successful_rows = 0
+
+        for idx, row in self.dataframe.iterrows():
+            # Get row identifier for logging
+            row_id = row.get("id", idx)
+
+            # Convert row to dict, excluding 'id' column if present
+            row_dict = row.to_dict()
+            if "id" in row_dict:
+                del row_dict["id"]
+
+            # Create Reader for this row
+            row_reader = Reader(row_dict, self.options)
+
+            # Try to process this row
+            try:
+                with row_reader.into_temp_dir() as temp_dir:
+                    successful_rows += 1
+                    yield temp_dir
+            except FileDatasetError as e:
+                # Log the error with row identifier
+                logger.warning(
+                    "Failed to process row %s: %s. File errors: %s",
+                    row_id,
+                    e,
+                    e.file_errors,
+                )
+                continue
+            except Exception as e:  # noqa: BLE001
+                # Log unexpected errors
+                logger.warning("Unexpected error processing row %s: %s", row_id, e)
+                continue
+
+        # If all rows failed, raise an error
+        if successful_rows == 0 and total_rows > 0:
+            raise FileDatasetError(
+                {"all_rows": "All rows failed to process"},
+                "All rows failed. Check error logs for details.",
+            )

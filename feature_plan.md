@@ -1,80 +1,71 @@
-# Task 4: Implement reader support for S3 data
+# Task 6: Implement reader support for DataFrames with partial failure handling
 
 **Status**: In progress
 
-**Description**: Extend reader functionality to download files from S3 to temporary directories.
+**Description**: Extend reader functionality to process pandas DataFrames with graceful handling of row-level failures.
 
 **Requirements**:
-- Modify `file_dataset.reader()` to accept S3 URLs (s3://bucket/key format) in the files dict values
-- Add `options` parameter to reader; the options allows us to use an s3 client for downloading files.
-- Implement S3 download logic in `.into_temp_dir()`; ensure s3_client uses s3transfer methods (s3_client.download_file; do not use get_object directly)
-- Maintain same interface as local file reader
-- Handle S3 errors (permissions, missing files, network issues)
+- Implement FileDataFrameReader. In its constructor it takes in a pandas DataFrame, which is saved as an instance variable.
+- Implement `into_temp_dir()` which yields a stream of temporary directories. Each DataFrame row represents a set of files to be processed together. It opens a Reader for each row then delegates to `into_temp_dir()` to the reader for each row. If the reader fails to read the row then the row is skipped and an error message is logged.
+    - Log which rows failed and why (for debugging). Use the user-defined `id` column if present or else fall back to the index column.
+- Modify `core.reader()` function to add a new kwarg, `dataframe`. This kwarg should be mutually exclusive with `row` (otherwise ValueError is raised). Exactly one should be specified. When `dataframe` arg is specified then  FileDataFrameReader is returned.
 
 **Testing**:
-- Test S3 file downloads using moto library for mocking
-- Test mixed local and S3 file sources
-- Test error handling for missing S3 objects; raise standard FileDatasetError for the files that can't be accessed
-- Test with different S3 credentials configurations
+- Test `reader(dataframe=all_successful_rows, options=defaults)` with all successful rows and confirm each file was downloaded to a temp dir.
+- Test `reader(dataframe=partial_failure, options=defaults)` with some failing rows (missing files, permission errors)
+- Test mixed local and S3 sources with partial failures
+- Verify failed rows are properly dropped from results
+- Test empty DataFrame and DataFrame with all failed rows; when all rows fail then the reader should fail with a message to check error logs.
 
 ## Planning
 
 ### High-level implementation plan:
 
-1. Review the existing reader implementation to understand current structure
-2. Modify the reader class to:
-   - Accept an optional `options` parameter (default to None, keyword-only)
-   - Detect S3 URLs in the files dict (s3:// prefix)
-   - Validate S3 URL format before processing
-   - For S3 URLs, require options parameter (raise error if None)
-   - Maintain support for local files (existing behavior)
+1. **Create FileDataFrameReader class**:
+   - Constructor takes a pandas DataFrame and optional Options instance
+   - Store DataFrame as instance variable
+   - Implement `into_temp_dir()` method that yields temp directories
 
-3. Update `into_temp_dir()` method to:
-   - First validate all files (local existence check, S3 HEAD request)
-   - Create temp directory as before
-   - For each file, check if it's local or S3
-   - For S3 files: use s3_client.download_file() method
-   - Handle errors and raise FileDatasetError for missing files
+2. **FileDataFrameReader.into_temp_dir() implementation**:
+   - Iterate through DataFrame rows
+   - For each row, convert to dict (excluding 'id' column if present)
+   - Create a Reader instance with the row dict
+   - Use Reader's into_temp_dir() in a try-except block
+   - If successful, yield the temp directory
+   - If fails, log error with row identifier (id column or index) and continue
+   - Track total rows vs successful rows
+   - If all rows fail, raise an exception with message to check error logs
 
-4. Key design considerations:
-   - S3 URLs format: s3://bucket/key
-   - Raise error if S3 URLs present but no options provided
-   - Ensure proper error handling for S3 errors (403, 404, network issues)
-   - Maintain backward compatibility with local files
-   - Validate S3 URLs with regex before attempting operations
+3. **Update core.reader() function**:
+   - Add `dataframe` kwarg (keyword-only, optional)
+   - Check mutual exclusivity: exactly one of `row` or `dataframe` must be provided
+   - If `dataframe` is provided, return FileDataFrameReader instance
+   - If `row` is provided, return Reader instance (current behavior)
 
-### Questions:
-1. Should we allow mixed local and S3 files in the same reader instance?
-   - Answer: Yes, based on the testing requirements mentioning "Test mixed local and S3 file sources"
+4. **Logging strategy**:
+   - Use Python's logging module
+   - Log at WARNING level for row failures
+   - Include row identifier (id or index) in log messages
+   - Include the specific error message from FileDatasetError
 
-2. How should we handle S3 credentials when options is None?
-   - Answer: Use Options.default() to get default boto3 session credentials
+5. **Error handling**:
+   - Gracefully handle FileDatasetError from Reader.into_temp_dir()
+   - Continue processing other rows on failure
+   - Track failures and report summary at the end
+   - Raise exception only if ALL rows fail
 
-3. Should download errors be aggregated or fail fast?
-   - Answer: Based on Task 1 requirements, raise FileDatasetError with mapping of filename to error message
-
-4. Should the `options` parameter be keyword-only or positional?
-   - Answer: Keyword-only and optional, consistent with the `row` parameter
-
-5. Should we validate S3 URL format before attempting download?
-   - Answer: Yes, validate S3 URLs before attempting operations
-
-6. Should we use transfer configuration from Options?
-   - Answer: Use defaults from s3_client, don't access private variables
-
-7. Error aggregation behavior for multiple files?
-   - Answer: Validate all S3 URLs exist first (using HEAD requests), consistent with local file behavior
-
-8. Options.default() behavior when options=None?
-   - Answer: Raise an error if no options are passed but user passes S3 URLs; don't create defaults
-
-9. Backward compatibility for reader() function?
-   - Answer: Yes, maintain compatibility by making options optional with default of None
+### Key design considerations:
+- FileDataFrameReader should accept same `options` parameter as Reader
+- The yielded temp directories should be handled as context managers
+- Each row should get its own isolated temporary directory
+- Maintain backward compatibility with existing reader() function
+- Use clear logging messages that help with debugging
 
 ### Testing plan:
-1. Test S3 file download with moto mocking
-2. Test mixed local and S3 sources in same reader
-3. Test error handling for missing S3 objects (404)
-4. Test error handling for permission denied (403)
-5. Test with explicit options vs default options
-6. Ensure FileDatasetError contains proper error mapping
+1. Test with DataFrame where all rows have valid files
+2. Test with DataFrame containing some rows with missing files
+3. Test mixed local and S3 sources with some failures
+4. Test empty DataFrame (should work but yield nothing)
+5. Test DataFrame where all rows fail (should raise exception)
+6. Test that row identifiers (id column vs index) are logged correctly
+7. Test that Options are properly passed through to Reader instances

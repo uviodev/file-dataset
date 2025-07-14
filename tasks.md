@@ -92,7 +92,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test return value format with S3 URLs
 
 ## Task 6: Implement reader support for DataFrames with partial failure handling
-**Status**: Not started
+**Status**: ✅ Completed
 **Description**: Extend reader functionality to process pandas DataFrames with graceful handling of row-level failures.
 
 **Requirements**:
@@ -113,12 +113,12 @@ This document outlines the implementation plan for the file-dataset library, pro
 **Description**: Extend write_files functionality to process multiple rows from DataFrames with graceful partial failure handling.
 
 **Requirements**:
-- Modify `file_dataset.write_files()` to accept a DataFrame, in addition to a Dict. The DataFrame is a new kwarg mutually exclusive with row kwarg.
-- Process each row independently: if one row fails, continue with others
-- Return results only for successfully written rows, maintaining row correspondence
+- Modify `file_dataset.write_files()` to accept a `dataframe` kwarg, in addition to the `row` kwarg. The DataFrame is a new kwarg mutually exclusive with row kwarg.
+    - Refactor existing logic to `_write_row()`
+    - Process each row independently: if one row fails, continue with others
+    - Return results only for successfully written rows, maintaining row correspondence
 - Handle partial failures gracefully: if some files in a row fail, skip entire row
-- Support batch operations for efficiency while maintaining row-level error isolation
-- Maintain same interface: each row gets its own ID-based directory structure
+- Maintain same output path structure: each row gets its own ID-based directory structure
 
 **Testing**:
 - Test batch writing with all successful rows
