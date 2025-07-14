@@ -128,49 +128,29 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test row-level failure isolation (one bad row doesn't affect others)
 - Test empty input and all-failed scenarios
 
-## Task 8: Implement reader support for PyArrow size table
+## Task 8a: Ensure FileDataFrameReader will return "id" for each row (fixing bug)
 **Status**: Not started
-**Description**: Add functionality to create PyArrow tables containing file size metadata without downloading the actual files.
+**Description**: Ensure FileDataFrameReader will return "id" for each row
 
-**Requirements**:
-- Implement `.into_size_table()` method on Reader and FileDataFrameReader; it returns a PyArrow table.
-    - For local files: use file system stat operations
-    - For S3 files: use S3 HEAD operations to get object metadata on every row. Concatenate the outputs. Do not download the files in this case! Drop error rows.
-- Return PyArrow table with schema: `{filename: pa.int64()}` (size in bytes)
-- Handle errors for inaccessible files; drop error rows but add log statements with the issues.
+**Requirements**
+- Since `into_temp_dir()` generator drops failing rows, the `into_temp_dir()` function will need to be modified to return the ID of the row.
+- Do the refactor to yield a row and temp dir for the streaming `into_temp_dir()` implementation.
+- Modify code usage of this API accordingly in the documentation.
 
 **Testing**:
-- Test size table creation for local files
-- Test size table creation for S3 files using moto
-- Test error handling for missing files
-- Test PyArrow table schema and data types
+- Update existing tests to test for the id.
+- In particular, for the partial failure case, make sure the id of the successful rows match the expected ids.
 
-## Task 9: Implement reader support for PyArrow blob table
-**Status**: Not started
-**Description**: Add functionality to load file contents directly into PyArrow tables as binary data.
 
-**Requirements**:
-- Implement `.into_blob_table()` method on Reader and FileDataFrameReader.
-- Load file contents into memory as binary data.
-- Return PyArrow table with schema: `{filename: pa.binary()}`
-- Handle memory management for large files
-- Support both local and S3 files
-
-**Testing**:
-- Test blob table creation with small files (< 1KB as per guidelines)
-- Test mixed local and S3 sources
-- Test PyArrow table schema and binary data integrity
-- Test memory usage with multiple files
-
-## Task 10: Implement Pipeline class
+## Task 8b: Implement Pipeline class
 **Status**: Not started
 **Description**: Create Pipeline class that combines read → process → write workflow for batch processing of file datasets.
 
 **Requirements**:
 - Implement `file_dataset.Pipeline(fn, write_options)` class
 - Add the code to a new file, pipeline.py. Use core and options primitives to implement
-- Make Pipeline callable with pandas DataFrame containing file URLs and IDs
-- Process each row: download files → call user function → upload results
+- Make Pipeline callable with pandas DataFrame with column for `id` and files. Raise ValueError if not provided.
+- Process each row in a streaming manner: for each row, download files → call user function → upload results; use the streaming `into_temp_dir()` implementation for data frame
 - Use separate temporary directories for each row to avoid disk space issues
 - Drop failed rows rather than failing entire batch
 - Make Pipeline pickle-able for distributed computing
@@ -183,6 +163,42 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test error handling and row dropping behavior
 - Test pickle serialization of Pipeline objects
 - Test temporary directory cleanup
+
+
+## Task 9: Implement reader support for PyArrow size table
+**Status**: Not started
+**Description**: Add functionality to create PyArrow tables containing file size metadata without downloading the actual files.
+
+**Requirements**:
+- Implement `.into_size_table()` method on Reader and FileDataFrameReader; it returns a PyArrow table.
+    - For local files: use file system stat operations
+    - For S3 files: use S3 HEAD operations to get object metadata on every row. Concatenate the outputs. Important: do not download the files in this case! Drop error rows.
+- Return PyArrow table with schema: `{id: pa.string(), filename: pa.int64()}` (where filename gives the size in bytes for each file column)
+- Handle errors for inaccessible files; drop error rows but add log statements with the issues.
+
+**Testing**:
+- Test size table creation for local files
+- Test size table creation for S3 files using moto
+- Test error handling for missing files
+- Test PyArrow table schema and data types
+
+## Task 10: Implement reader support for PyArrow blob table
+**Status**: Not started
+**Description**: Add functionality to load file contents directly into PyArrow tables as binary data.
+
+**Requirements**:
+- Implement `.into_blob_table()` method on Reader and FileDataFrameReader.
+- Load file contents into memory as binary data.
+- Return PyArrow table with schema: `{id: pa.string(), filename: pa.binary()}`
+- Handle memory management for large files
+- Support both local and S3 files
+
+**Testing**:
+- Test blob table creation with small files (< 1KB as per guidelines)
+- Test mixed local and S3 sources
+- Test PyArrow table schema and binary data integrity
+- Test memory usage with multiple files
+
 
 ## Task 11: Test Pipeline with local Ray data integration
 **Status**: Not started
@@ -208,18 +224,19 @@ This document outlines the implementation plan for the file-dataset library, pro
 
 **Requirements**:
 - Implement `file_dataset.ray.blob_reader(dataframe, batch_size, options)`
+- Raise ValueError if dataframe does not have an `id` column that is unique
 - Create custom Ray Datasource following Ray's API
-- Use `into_size_table()` for memory estimation on first batch
-- Implement efficient batching strategy for memory management
+- Use `into_size_table()` for memory estimation on first batch (do not call this function for the whole dataset but use self.dataframe.head(batch_size))`
+- For `get_read_tasks()`: Create one read task that will yield `batch_size` rows for each dataset that returns `into_blob_table()` for each dataframe. Ignore the parallelism command and require the user to specify `batch_size` as the blob tables can out-of-memory if they exceed `batch_size` rows.
 - Return Ray dataset with binary data that can be further processed
-- Support zero-copy operations where possible
+- Support zero-copy operations if possible
 
 **Testing**:
 - Test blob_reader with various batch sizes
 - Test memory usage and estimation accuracy
-- Test integration with Ray's processing pipeline
+- Test integration with Ray's dataset library pipeline
 - Test zero-copy operations when available
-- Test with realistic file dataset sizes (keeping individual files < 1KB)
+- Add an integration test with a pseudo-realistic dataset with 1000 rows (keeping individual files < 1KB)
 
 ## Implementation Notes
 
