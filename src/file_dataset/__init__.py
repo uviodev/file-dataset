@@ -10,5 +10,6 @@ except (ImportError, PackageNotFoundError):
 # Export core functionality
 from .core import reader, write_files
 from .exceptions import FileDatasetError
+from .options import Options
 
-__all__ = ["FileDatasetError", "__version__", "reader", "write_files"]
+__all__ = ["FileDatasetError", "Options", "__version__", "reader", "write_files"]

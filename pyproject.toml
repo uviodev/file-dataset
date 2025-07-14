@@ -7,7 +7,7 @@ authors = [
     { name = "Patrick Violette", email = "violette.patrick718@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["boto3>=1.34.0"]
 
 [project.scripts]
 lint = "file_dataset.scripts:pre_commit"
@@ -36,6 +36,9 @@ dev = [
     "bandit[toml]>=1.8.0",
     "safety>=3.2.0",
     "mypy>=1.14.0",
+    "moto[s3]>=5.0.0",
+    "boto3-stubs[s3]>=1.34.0",
+    "pytest-mock>=3.14.0",
 ]
 
 [tool.ruff]
@@ -93,7 +96,14 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "D100", "D101", "D102", "D103", "D104"]
+"tests/*" = [
+    "S101",    # assert usage is expected in tests
+    "D100", "D101", "D102", "D103", "D104",  # docstring requirements relaxed for tests
+    "S105",    # hardcoded passwords are fine in tests
+    "S301",    # pickle usage is being tested
+    "SLF001",  # accessing private members is necessary in tests
+    "PLR2004", # magic values are fine in tests
+]
 "src/file_dataset/scripts.py" = ["S603"]  # subprocess is safe here - using sys.executable
 
 [tool.ruff.lint.pydocstyle]
