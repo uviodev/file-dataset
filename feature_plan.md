@@ -1,53 +1,48 @@
-# Task 7: Implement write_files support for DataFrames with partial failure handling
+# Task 5: Implement writer support for S3 uploads
 
 ## Overview
-Extend `write_files()` functionality to process multiple rows from DataFrames with graceful partial failure handling.
+Extend writer functionality to upload files to S3 with proper path organization, supporting both row and dataframe modes.
 
 ## Requirements
-1. Modify `file_dataset.write_files()` to accept a `dataframe` kwarg, in addition to the `row` kwarg
-2. The DataFrame is a new kwarg mutually exclusive with row kwarg
-3. Refactor existing logic to `_write_row_files()`; when `row` is specified, just call that.
-4. Otherwise for dataframe input, call `_write_row_files()` for each row independently in sequence. If one row fails, continue with others
-5. Return results only for successfully written rows in a DataFrame. Provide an `id` column to match data.
-6. Ensure the row ID is logged for failed rows.
-7. Maintain same output path structure: each row gets its own ID-based directory structure
+1. Modify `file_dataset.write_files()` to detect S3 paths (s3://bucket/prefix format)
+2. Implement S3 upload logic with path structure: `s3://bucket/prefix/id/filename`
+3. Add `options` parameter for S3 credentials
+4. Return S3 URLs in the result mapping
+5. Handle S3 upload errors gracefully
+6. Ensure use of s3_client.upload_file to ensure multipart uploads
 
 ## Implementation Plan
 
-### Step 1: Refactor existing write_files logic
-- Extract the core logic from `write_files()` into a new `_write_row()` function
-- This function will handle writing a single row of files
-- Keep the same validation and error handling logic
+### Step 1: Add options parameter to write_files signature
+- Add `options` parameter to `write_files()` function
+- Pass options through to internal functions that need it
 
-### Step 2: Modify write_files() signature
-- Add `dataframe` as a new kwarg parameter
-- Make `row` and `dataframe` mutually exclusive (similar to reader())
-- Add proper validation for mutual exclusivity
-- When a dataframe is passed in, the output signature is a dataframe
+### Step 2: Modify _copy_files_to_destination to support S3
+- Detect if destination is S3 URL using existing `_is_s3_url()` helper
+- If S3, upload file instead of copying
+- Return S3 URL in result mapping
 
-### Step 3: Implement DataFrame processing logic
-- When `dataframe` is provided, iterate through each row
-- For each row, call `_write_row()` with appropriate parameters
-- Handle errors gracefully - log failures and continue with next row
-- Collect successful results maintaining row correspondence
+### Step 3: Create S3 upload logic
+- Use s3_client.upload_file for multipart upload support
+- Handle S3-specific errors gracefully
+- Return proper S3 URLs in result
 
-### Step 4: Handle S3 support
-- Ensure S3 upload functionality works with DataFrame input
-- Pass options parameter through to support S3 credentials
-- Maintain proper path structure for S3 uploads
+### Step 4: Update _write_row_files to support S3
+- Pass options parameter through
+- Modify to return S3 URLs when uploading to S3
 
-### Step 5: Error handling and logging
-- Log which rows failed and why (use 'id' column from DataFrame)
-- If all rows fail, raise FileDatasetError with appropriate message
-- Return a DataFrame that has an id column and all the successful files.
+### Step 5: Update _write_dataframe_files to support S3
+- Pass options parameter through
+- Ensure S3 URLs are returned in DataFrame results
 
 ## Testing
 
 ### Test Cases
-1. **All successful rows** - Test writing DataFrame where all rows succeed
-2. **Partial failures** - Test with some rows having missing files or permission errors
-3. **Mixed destinations** - Test with both local and S3 destinations
-4. **Row isolation** - Verify one bad row doesn't affect others
-5. **Empty/all-failed** - Test empty DataFrame and all rows failing scenarios
-6. **S3 uploads** - Test S3 upload functionality with mocked S3 using moto
-7. **Return value format** - Verify correct mapping structure is returned
+1. **Single file S3 upload** - Test uploading a single file to S3
+2. **Multiple files S3 upload** - Test uploading multiple files to S3
+3. **Mixed local and S3 destinations** - Test that we can write to both local and S3
+4. **S3 error handling** - Test handling of S3 permission errors, etc.
+5. **DataFrame S3 uploads** - Test DataFrame mode with S3 destinations
+6. **Partial failures with S3** - Test some rows succeeding and others failing
+7. **S3 URL format validation** - Test invalid S3 URLs are rejected
+8. **Options requirement** - Test that options are required for S3 uploads

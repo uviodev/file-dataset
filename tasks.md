@@ -74,7 +74,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test with different S3 credentials configurations
 
 ## Task 5: Implement writer support for S3 uploads
-**Status**: Not started
+**Status**: ✅ Completed
 **Description**: Extend writer functionality to upload files to S3 with proper path organization.
 
 **Requirements**:

@@ -25,7 +25,7 @@ def _parse_s3_url(url: str) -> tuple[str, str] | None:
     Returns:
         Tuple of (bucket, key) if valid S3 URL, None otherwise
     """
-    match = re.match(r"^s3://([^/]+)/(.+)$", url)
+    match = re.match(r"^s3://([^/]+)/?(.*)$", url)
     if match:
         return match.group(1), match.group(2)
     return None
@@ -73,12 +73,15 @@ class Reader:
         if not parsed:
             return f"Invalid S3 URL format: {source_str}"
 
+        bucket, key = parsed
+        if not key:  # Reader needs a key to read a file
+            return f"Invalid S3 URL format: {source_str}"
+
         # Check if options are provided for S3
         if self.options is None:
             return "Options required for S3 URLs but not provided"
 
         # Validate S3 object exists using HEAD request
-        bucket, key = parsed
         try:
             self.options.s3_client.head_object(Bucket=bucket, Key=key)
         except Exception as e:  # noqa: BLE001
@@ -261,20 +264,66 @@ def _copy_files_to_destination(
     return result, file_errors
 
 
+def _upload_files_to_s3(
+    row: dict[str, str | Path | None],
+    bucket: str,
+    s3_key_prefix: str,
+    options: Options,
+) -> dict[str, str | None]:
+    """Upload files to S3.
+
+    Args:
+        row: Dictionary mapping filenames to their source paths or None
+        bucket: S3 bucket name
+        s3_key_prefix: S3 key prefix for uploads
+        options: Options instance with S3 client
+
+    Returns:
+        Dictionary mapping filenames to S3 URLs
+
+    Raises:
+        FileDatasetError: If any uploads fail
+    """
+    result = {}
+    upload_errors = {}
+
+    for filename, source_path in row.items():
+        if source_path is None:
+            result[filename] = None
+            continue
+
+        source = Path(source_path)
+        s3_key = f"{s3_key_prefix}/{filename}"
+
+        try:
+            options.s3_client.upload_file(str(source), bucket, s3_key)
+            result[filename] = f"s3://{bucket}/{s3_key}"
+        except Exception as e:  # noqa: BLE001
+            upload_errors[filename] = f"Failed to upload file: {e}"
+
+    # If any uploads failed, raise error
+    if upload_errors:
+        raise FileDatasetError(upload_errors, "Failed to upload some files")
+
+    return result
+
+
 def _write_row_files(
     row: dict[str, str | Path | None],
     into_path: str | Path,
     id: str,  # noqa: A002
-) -> dict[str, Path | None]:
-    """Write a single row of files to destination directory.
+    options: Options | None = None,
+) -> dict[str, Path | None | str]:
+    """Write a single row of files to destination directory or S3.
 
     Args:
         row: Dictionary mapping filenames to their source paths or None
-        into_path: Base destination directory
+        into_path: Base destination directory or S3 path
         id: Unique identifier for this set of files
+        options: Options instance for S3 operations
 
     Returns:
-        Dictionary mapping filenames to their final destination paths or None
+        Dictionary mapping filenames to their final destination paths or S3 URLs
 
     Raises:
         FileDatasetError: If any required files cannot be written
@@ -283,13 +332,20 @@ def _write_row_files(
     if not row:
         return {}
 
-    dest_base = Path(into_path)
-    dest_dir = dest_base / id
-
     # Validate all non-None source files exist before starting
     file_errors = _validate_source_files(row)
     if file_errors:
         raise FileDatasetError(file_errors, "Cannot write files to destination")
+
+    # Check if destination is S3
+    if _is_s3_url(str(into_path)):
+        # S3 path handling
+        bucket, prefix = _parse_s3_url(str(into_path))
+        s3_key_prefix = f"{prefix}/{id}" if prefix else id
+        return _upload_files_to_s3(row, bucket, s3_key_prefix, options)
+    # Local path handling
+    dest_base = Path(into_path)
+    dest_dir = dest_base / id
 
     # Create destination directory
     try:
@@ -313,12 +369,14 @@ def _write_row_files(
 def _write_dataframe_files(
     dataframe: pd.DataFrame,
     into_path: str | Path,
+    options: Options | None = None,
 ) -> pd.DataFrame:
     """Write files from DataFrame to destination directories.
 
     Args:
         dataframe: DataFrame where each row contains files to write
-        into_path: Base destination directory
+        into_path: Base destination directory or S3 path
+        options: Options instance for S3 operations
 
     Returns:
         DataFrame with id column and file columns for successful writes
@@ -326,10 +384,6 @@ def _write_dataframe_files(
     Raises:
         FileDatasetError: If all rows fail to write
         ValueError: If DataFrame doesn't have an id column
-
-    Note:
-        S3 upload support is not yet implemented. The `options` parameter
-        will be added to support S3 uploads in the future.
     """
     # Check if DataFrame has id column
     if "id" not in dataframe.columns:
@@ -351,7 +405,7 @@ def _write_dataframe_files(
 
         try:
             # Write files for this row
-            result = _write_row_files(file_columns, into_path, row_id)
+            result = _write_row_files(file_columns, into_path, row_id, options)
 
             # Build successful row data
             row_data = {"id": row_id}
@@ -393,14 +447,16 @@ def write_files(
     into_path: str | Path,
     id: str | None = None,  # noqa: A002
     dataframe: pd.DataFrame | None = None,
+    options: Options | None = None,
 ) -> dict[str, Path | None] | pd.DataFrame:
     """Write files to destination directory with ID-based organization.
 
     Args:
         row: Dictionary mapping filenames to their source paths or None
-        into_path: Base destination directory (keyword-only)
+        into_path: Base destination directory or S3 path (keyword-only)
         id: Unique identifier for this set of files (keyword-only, required with row)
         dataframe: DataFrame where each row contains files to write (keyword-only)
+        options: Options instance for S3 operations (keyword-only, required for S3)
 
     Returns:
         Dictionary mapping filenames to destination paths (when row is provided)
@@ -409,6 +465,7 @@ def write_files(
     Raises:
         FileDatasetError: If any required files cannot be written
         ValueError: If both row and dataframe are provided, or if neither is provided
+        ValueError: If S3 path is provided without options
     """
     # Check mutual exclusivity
     if row is not None and dataframe is not None:
@@ -419,15 +476,26 @@ def write_files(
         msg = "Must specify either 'row' or 'dataframe' argument"
         raise ValueError(msg)
 
+    # Check if S3 path requires options
+    if _is_s3_url(str(into_path)):
+        if options is None:
+            msg = "Options required for S3 paths"
+            raise ValueError(msg)
+        # Validate S3 URL format
+        parsed = _parse_s3_url(str(into_path))
+        if not parsed or not parsed[0]:  # Check for empty bucket name
+            msg = f"Invalid S3 URL format: {into_path}"
+            raise ValueError(msg)
+
     # Handle single row case
     if row is not None:
         if id is None:
             msg = "Must specify 'id' when using 'row' argument"
             raise ValueError(msg)
-        return _write_row_files(row, into_path, id)
+        return _write_row_files(row, into_path, id, options)
 
     # Handle DataFrame case
-    return _write_dataframe_files(dataframe, into_path)
+    return _write_dataframe_files(dataframe, into_path, options)
 
 
 class FileDataFrameReader:
