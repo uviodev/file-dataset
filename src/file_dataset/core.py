@@ -511,11 +511,11 @@ class FileDataFrameReader:
         self.dataframe = dataframe
         self.options = options
 
-    def into_temp_dir(self) -> Generator[Path, None, None]:
-        """Yield temporary directories for each successful row in the DataFrame.
+    def into_temp_dir(self) -> Generator[tuple[str, Path], None, None]:
+        """Yield (row_id, temporary directory) tuples for each successful row.
 
         Yields:
-            Path to temporary directory for each successful row
+            Tuple of (row_id, Path) for each successful row
 
         Raises:
             FileDatasetError: If all rows fail to process
@@ -525,7 +525,7 @@ class FileDataFrameReader:
 
         for idx, row in self.dataframe.iterrows():
             # Get row identifier for logging
-            row_id = row.get("id", idx)
+            row_id = row.get("id", str(idx))
 
             # Convert row to dict, excluding 'id' column if present
             row_dict = row.to_dict()
@@ -539,7 +539,7 @@ class FileDataFrameReader:
             try:
                 with row_reader.into_temp_dir() as temp_dir:
                     successful_rows += 1
-                    yield temp_dir
+                    yield row_id, temp_dir
             except FileDatasetError as e:
                 # Log the error with row identifier
                 logger.warning(

@@ -129,7 +129,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test empty input and all-failed scenarios
 
 ## Task 8a: Ensure FileDataFrameReader will return "id" for each row (fixing bug)
-**Status**: Not started
+**Status**: ✅ Completed
 **Description**: Ensure FileDataFrameReader will return "id" for each row
 
 **Requirements**

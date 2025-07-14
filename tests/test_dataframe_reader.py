@@ -38,7 +38,8 @@ class TestDataFrameReader:
 
         # Process all rows and verify each gets its own temp dir
         temp_dirs = []
-        for temp_dir in df_reader.into_temp_dir():
+        row_ids = []
+        for row_id, temp_dir in df_reader.into_temp_dir():
             assert temp_dir.exists()
             assert temp_dir.is_dir()
 
@@ -47,9 +48,13 @@ class TestDataFrameReader:
             assert (temp_dir / "mask.txt").exists()
 
             temp_dirs.append(temp_dir)
+            row_ids.append(row_id)
 
         # Should have processed both rows
         assert len(temp_dirs) == 2
+        assert len(row_ids) == 2
+        # Verify row IDs are correct
+        assert set(row_ids) == {"row1", "row2"}
 
     def test_partial_failure(self, caplog):
         """Test reading DataFrame with some failing rows."""
@@ -81,11 +86,16 @@ class TestDataFrameReader:
 
         # Process rows - should skip failing row
         temp_dirs = []
-        for temp_dir in df_reader.into_temp_dir():
+        row_ids = []
+        for row_id, temp_dir in df_reader.into_temp_dir():
             temp_dirs.append(temp_dir)
+            row_ids.append(row_id)
 
         # Should have processed 2 out of 3 rows
         assert len(temp_dirs) == 2
+        assert len(row_ids) == 2
+        # Verify correct row IDs for successful rows (row1 and row3)
+        assert set(row_ids) == {"row1", "row3"}
 
         # Check that error was logged for row2
         assert "Failed to process row row2" in caplog.text
@@ -100,7 +110,8 @@ class TestDataFrameReader:
         df_reader = reader(dataframe=df)
 
         # Process rows - should yield nothing
-        temp_dirs = list(df_reader.into_temp_dir())
+        results = list(df_reader.into_temp_dir())
+        temp_dirs = [temp_dir for row_id, temp_dir in results]
 
         # Should have processed no rows
         assert len(temp_dirs) == 0
@@ -182,14 +193,19 @@ class TestDataFrameReader:
 
         # Process rows - should skip failing rows (row2 and row3)
         temp_dirs = []
-        for temp_dir in df_reader.into_temp_dir():
+        row_ids = []
+        for row_id, temp_dir in df_reader.into_temp_dir():
             # Verify files exist in temp dir
             assert (temp_dir / "local_file").exists()
             assert (temp_dir / "s3_file").exists()
             temp_dirs.append(temp_dir)
+            row_ids.append(row_id)
 
         # Should have processed 2 out of 4 rows
         assert len(temp_dirs) == 2
+        assert len(row_ids) == 2
+        # Verify correct row IDs for successful rows (row1 and row4)
+        assert set(row_ids) == {"row1", "row4"}
 
         # Check that errors were logged for row2 and row3
         assert "Failed to process row row2" in caplog.text
