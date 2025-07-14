@@ -27,7 +27,7 @@ To develop a new feature:
 4. Plan the functionality to be added and update `feature_plan.md` accordingly.
     * Taking into account understanding of the codebase and README.md, plan the code changes to make at a high level.
     * Think of a few high level test cases. Add these to a section called `testing`
-5. Ask any clarifying questions. Only continue once questions are answered. Ensure feature_plan.md has removed questions and replaced the questions with answers.
+5. Ask any clarifying questions. Only continue once questions are answered. Ensure feature_plan.md has removed questions and replaced the questions with answers. Do not proceed until every question is answered.
 6. Once feature_plan.md has been finalized, implement the feature using red-green refactor loop.
     a. Add a simple test for the code. Run the test and confirm it is failing due to code within the file_dataset library.
     b. Implement a code change to make the test pass.
@@ -37,6 +37,7 @@ To develop a new feature:
     f. Repeat the loop by adding a new test and then going through each instruction.
 7. Do one last confirmation that the tests pass and the linting passes.
 8. Update any documentation in the src/ folder with hints or tips about the software usage.
+9. In tasks.md mark the task as done.
 
 ## Development Commands
 The project uses the `uv` command. Prepend typical commands with `uv run` such as `uv run pytest` or `uv run python`.
