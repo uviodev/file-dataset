@@ -24,5 +24,24 @@ def pre_commit() -> None:
     sys.exit(result.returncode)
 
 
+def test() -> None:
+    """Run pytest tests/ with forwarded arguments."""
+    # Get the project root directory
+    project_root = Path(__file__).parent.parent.parent
+
+    # Build command with pytest tests/ and any additional arguments
+    cmd = [sys.executable, "-m", "pytest", "tests/"] + sys.argv[1:]
+
+    # Run pytest
+    result = subprocess.run(  # nosec B603
+        cmd,
+        cwd=project_root,
+        check=False,
+    )
+
+    # Exit with the same code as pytest
+    sys.exit(result.returncode)
+
+
 if __name__ == "__main__":
     pre_commit()

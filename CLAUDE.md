@@ -36,7 +36,7 @@ To develop a new feature:
     d. Rerun the failing test to make sure it passes; continue changing the code until it passes.
     e. Confirm all tests pass (not just the previously failing one); fix any failing ones.
     f. Repeat the loop by adding a new test and then going through each instruction.
-7. Run `git add .` and then do one last confirmation that the tests pass and the linting passes.
+7. Run `git add .` and then do one last confirmation that the linting passes (`uv run lint`) and tests all pass (`uv run test`).
 8. Update any documentation in the src/ folder with hints or tips about the software usage.
 9. In tasks.md mark the task as done.
 
@@ -44,7 +44,20 @@ To develop a new feature:
 The project uses the `uv` command. Prepend typical commands with `uv run` such as `uv run pytest` or `uv run python`.
 
 ### Running Tests
-Please run `pytest` command via `uv run`:
+The project provides a convenient `test` command that runs pytest:
+
+```bash
+# Run all tests (equivalent to `uv run pytest tests/`)
+uv run test
+
+# Run tests with additional pytest arguments
+uv run test -v              # Verbose output
+uv run test --lf            # Run only last failed tests
+uv run test --lf -v         # Combine flags
+uv run test -k "test_s3"    # Run specific tests by pattern
+```
+
+You can also run pytest directly:
 
 ```bash
 uv run pytest tests/
@@ -53,7 +66,7 @@ uv run pytest tests/
 During development, to avoid too many log messages, rerun only failing tests with the last failed `--lf` flag:
 
 ```bash
-uv run pytest tests/ --lf -v
+uv run test --lf -v
 ```
 
 Once the tests are passing, rerun all tests to confirm nothing else is broken.

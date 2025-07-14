@@ -11,6 +11,7 @@ dependencies = ["boto3>=1.34.0"]
 
 [project.scripts]
 lint = "file_dataset.scripts:pre_commit"
+test = "file_dataset.scripts:test"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0.0"]
