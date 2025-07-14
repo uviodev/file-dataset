@@ -1,68 +1,78 @@
-# Task 1: Implement reader into_temp_dir for local directories
+# Task 2: Implement writer into_path for local directories
 
 ## Overview
-Implement basic reader functionality that copies files from local directories to temporary directories using a context manager pattern.
+Implement basic writer functionality that copies files from one local directory to another with ID-based organization.
 
 ## High-Level Design
 
 ### Core Components
-1. **FileDatasetError Exception**: Custom exception class for file dataset operations
-2. **Reader Class**: Handles file copying operations with context manager support
-3. **reader() Function**: Factory function that creates Reader instances
+1. **write_files() Function**: Main function for writing files with ID-based organization
+2. **Directory Management**: Automatic creation of output directory structure
+3. **Error Handling**: Graceful handling of missing files and write failures
+4. **None Value Support**: Proper handling of optional output files (None values)
 
 ### API Design
 ```python
 # Usage pattern
-files_dict = {"image.mha": "/path/to/image.mha", "mask.mha": "/path/to/mask.mha"}
-with file_dataset.reader(row=files_dict).into_temp_dir() as temp_dir:
-    # temp_dir contains copied files: image.mha, mask.mha
-    process_files(temp_dir)
-# temp_dir is automatically cleaned up
+files_dict = {"image.mha": Path("/source/image.mha"), "mask.mha": Path("/source/mask.mha")}
+result = file_dataset.write_files(
+    row=files_dict, 
+    into_path="/output/base",
+    id="sample_001"
+)
+# Returns: {"image.mha": Path("/output/base/sample_001/image.mha"), ...}
 ```
 
 ### Key Design Decisions
+- Use keyword-only arguments for `into_path` and `id`
+- Create directory structure: `{into_path}/{id}/filename`
 - Use `pathlib.Path` for all path operations
 - Use `shutil.copy2()` to preserve file metadata during copying
-- Use `tempfile.TemporaryDirectory` for automatic cleanup
 - Raise `FileDatasetError` for missing files with detailed error mapping
-- Copy files with original names to temp directory (no path structure)
+- Support None values in input dict (optional files) and propagate to output
+- Atomic operation: if any required file fails, no files are written
 
 ## Implementation Plan
 
-### 1. Exception Classes
-Create `FileDatasetError` exception class:
-- Store mapping of filename to error message
-- Inherit from standard Exception
-- Include helpful string representation
-
-### 2. Reader Class  
+### 1. write_files Function
 ```python
-class Reader:
-    def __init__(self, files_dict: Dict[str, Union[str, Path]]):
-        # Store files mapping
-        # Validate input format
-    
-    def into_temp_dir(self) -> ContextManager[Path]:
-        # Return context manager for temporary directory
-        # Copy files on enter, cleanup on exit
+def write_files(
+    row: dict[str, str | Path | None], 
+    *, 
+    into_path: str | Path, 
+    id: str
+) -> dict[str, Path | None]:
+    # Validate inputs
+    # Check source files exist (skip None values)
+    # Create output directory structure
+    # Copy files to destination
+    # Return mapping of filenames to final paths
 ```
 
-### 3. Factory Function
-```python
-def reader(*, row: Dict[str, Union[str, Path]]) -> Reader:
-    # Create and return Reader instance
-    # Validate row parameter is provided as keyword
-```
+### 2. Key Implementation Details
+- **Validation Phase**: Check all non-None source files exist before starting
+- **Directory Creation**: Use `Path.mkdir(parents=True, exist_ok=True)`
+- **File Copying**: Use `shutil.copy2()` for metadata preservation
+- **Error Handling**: Collect all errors and raise single FileDatasetError
+- **None Handling**: Skip None values in validation and copying, propagate to output
+
+### 3. Error Scenarios
+- Missing source files (non-None values)
+- Permission errors on destination directory
+- Disk space issues during copying
+- Invalid path formats
 
 ## Testing Plan
 
 ### Test Cases
-1. **Single file copy**: Test with one file
-2. **Multiple file copy**: Test with several files  
+1. **Single file write**: Test with one file
+2. **Multiple file write**: Test with several files  
 3. **Missing file error**: Test FileDatasetError is raised with proper mapping
-4. **Context manager cleanup**: Verify temp directory is removed
+4. **Directory creation**: Verify output directory structure is created
 5. **File content integrity**: Verify copied files have same content
-6. **Edge cases**: Empty dict, None values, invalid paths
+6. **None value handling**: Test optional files (None values) are handled correctly
+7. **Edge cases**: Empty dict, all None values, invalid paths
+8. **Atomic operation**: Verify no files written if any required file fails
 
 ### Test Data Structure
 ```
@@ -74,17 +84,18 @@ tests/
 ```
 
 ### Test Implementation
-- Use pytest fixtures for test data creation
+- Use pytest fixtures for test data creation and temp directory cleanup
 - Test both success and failure paths
-- Verify proper cleanup in all scenarios
+- Verify proper directory creation and file placement
 - Test with various file types and sizes (all < 1KB)
+- Test None value propagation through the function
 
 ## File Structure Changes
 ```
 src/file_dataset/
-  __init__.py          # Export reader function and FileDatasetError
-  exceptions.py        # FileDatasetError class
-  core.py             # Reader class and reader function
+  __init__.py          # Export reader, write_files functions and FileDatasetError
+  exceptions.py        # FileDatasetError class (already exists)
+  core.py             # Reader class, reader function, and write_files function
 ```
 
 ## Dependencies

@@ -19,7 +19,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test error handling for missing source files. When source files are not found then a clear exception should be raised.
 
 ## Task 2: Implement writer into_path for local directories
-**Status**: Not started  
+**Status**: ✅ Completed  
 **Description**: Create basic writer functionality that copies files from one local directory to another with ID-based organization.
 
 **Requirements**:
