@@ -66,7 +66,7 @@ File dataset can download data
 
 ```python
 s3_data = {"image.mha": "s3://my-bucket/image.mha"}
-with file_dataset.reader(s3_data).into_temp_dir() as tmp:
+with file_dataset.reader(row=s3_data).into_temp_dir() as tmp:
     # Tmp contains a file: image.mha
     # for simplicty we set input=output though
     # general consumers may prefer two distinct temp paths.
@@ -184,7 +184,7 @@ This data can be then loaded into a PyArrow table. The blob data in s3 is fetche
 ```python
 # Assume a 1MB s3 object `image_mask.mha`.
 s3_data = {"image.mha": "s3://my-bucket/image_mask.mha"}
-pyarrow_table = file_dataset.reader(row=s3_data).into_blob_table()
+pyarrow_table = file_dataset.reader(dataframe=s3_data).into_blob_table()
 pyarrow_table.schema()  # {"image.mha": pa.binary()}
 # has 1 row, which is 1MB in size
 ```

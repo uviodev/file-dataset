@@ -96,28 +96,24 @@ This document outlines the implementation plan for the file-dataset library, pro
 **Description**: Extend reader functionality to process pandas DataFrames with graceful handling of row-level failures.
 
 **Requirements**:
-- Modify `file_dataset.reader()` to accept pandas DataFrame as input, in addition to a single row dict
-- Each DataFrame row represents a set of files to be processed together
-- Implement partial success: if some rows fail to load, drop them and continue with successful rows
-- Return results only for successfully processed rows
-- Log or track which rows failed and why (for debugging)
-- Maintain same `.into_temp_dir()`, `.into_size_table()`, `.into_blob_table()` interface
-- For `into_temp_dir()`: yield one temporary directory per successful row
+- Implement FileDataFrameReader. In its constructor it takes in a pandas DataFrame, which is saved as an instance variable.
+- Implement `into_temp_dir()` which yields a stream of temporary directories. Each DataFrame row represents a set of files to be processed together. It opens a Reader for each row then delegates to `into_temp_dir()` to the reader for each row. If the reader fails to read the row then the row is skipped and an error message is logged.
+    - Log which rows failed and why (for debugging). Use the user-defined `id` column if present or else fall back to the index column.
+- Modify `core.reader()` function to add a new kwarg, `dataframe`. This kwarg should be mutually exclusive with `row` (otherwise ValueError is raised). Exactly one should be specified. When `dataframe` arg is specified then  FileDataFrameReader is returned.
 
 **Testing**:
-- Test DataFrame with all successful rows
-- Test DataFrame with some failing rows (missing files, permission errors)
+- Test `reader(dataframe=all_successful_rows, options=defaults)` with all successful rows and confirm each file was downloaded to a temp dir.
+- Test `reader(dataframe=partial_failure, options=defaults)` with some failing rows (missing files, permission errors)
 - Test mixed local and S3 sources with partial failures
 - Verify failed rows are properly dropped from results
-- Test error logging/tracking functionality
-- Test empty DataFrame and DataFrame with all failed rows
+- Test empty DataFrame and DataFrame with all failed rows; when all rows fail then the reader should fail with a message to check error logs.
 
 ## Task 7: Implement write_files support for DataFrames with partial failure handling
 **Status**: Not started
 **Description**: Extend write_files functionality to process multiple rows from DataFrames with graceful partial failure handling.
 
 **Requirements**:
-- Modify `file_dataset.write_files()` to accept list of file dictionaries (from DataFrame rows)
+- Modify `file_dataset.write_files()` to accept a DataFrame, in addition to a Dict. The DataFrame is a new kwarg mutually exclusive with row kwarg.
 - Process each row independently: if one row fails, continue with others
 - Return results only for successfully written rows, maintaining row correspondence
 - Handle partial failures gracefully: if some files in a row fail, skip entire row
@@ -137,11 +133,11 @@ This document outlines the implementation plan for the file-dataset library, pro
 **Description**: Add functionality to create PyArrow tables containing file size metadata without downloading the actual files.
 
 **Requirements**:
-- Implement `.into_size_table()` method on reader
-- For local files: use file system stat operations
-- For S3 files: use S3 HEAD operations to get object metadata
+- Implement `.into_size_table()` method on Reader and FileDataFrameReader; it returns a PyArrow table.
+    - For local files: use file system stat operations
+    - For S3 files: use S3 HEAD operations to get object metadata on every row. Concatenate the outputs. Do not download the files in this case! Drop error rows.
 - Return PyArrow table with schema: `{filename: pa.int64()}` (size in bytes)
-- Handle errors for inaccessible files
+- Handle errors for inaccessible files; drop error rows but add log statements with the issues.
 
 **Testing**:
 - Test size table creation for local files
@@ -154,8 +150,8 @@ This document outlines the implementation plan for the file-dataset library, pro
 **Description**: Add functionality to load file contents directly into PyArrow tables as binary data.
 
 **Requirements**:
-- Implement `.into_blob_table()` method on reader
-- Load file contents into memory as binary data
+- Implement `.into_blob_table()` method on Reader and FileDataFrameReader.
+- Load file contents into memory as binary data.
 - Return PyArrow table with schema: `{filename: pa.binary()}`
 - Handle memory management for large files
 - Support both local and S3 files
