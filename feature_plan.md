@@ -1,71 +1,53 @@
-# Task 6: Implement reader support for DataFrames with partial failure handling
+# Task 7: Implement write_files support for DataFrames with partial failure handling
 
-**Status**: In progress
+## Overview
+Extend `write_files()` functionality to process multiple rows from DataFrames with graceful partial failure handling.
 
-**Description**: Extend reader functionality to process pandas DataFrames with graceful handling of row-level failures.
+## Requirements
+1. Modify `file_dataset.write_files()` to accept a `dataframe` kwarg, in addition to the `row` kwarg
+2. The DataFrame is a new kwarg mutually exclusive with row kwarg
+3. Refactor existing logic to `_write_row_files()`; when `row` is specified, just call that.
+4. Otherwise for dataframe input, call `_write_row_files()` for each row independently in sequence. If one row fails, continue with others
+5. Return results only for successfully written rows in a DataFrame. Provide an `id` column to match data.
+6. Ensure the row ID is logged for failed rows.
+7. Maintain same output path structure: each row gets its own ID-based directory structure
 
-**Requirements**:
-- Implement FileDataFrameReader. In its constructor it takes in a pandas DataFrame, which is saved as an instance variable.
-- Implement `into_temp_dir()` which yields a stream of temporary directories. Each DataFrame row represents a set of files to be processed together. It opens a Reader for each row then delegates to `into_temp_dir()` to the reader for each row. If the reader fails to read the row then the row is skipped and an error message is logged.
-    - Log which rows failed and why (for debugging). Use the user-defined `id` column if present or else fall back to the index column.
-- Modify `core.reader()` function to add a new kwarg, `dataframe`. This kwarg should be mutually exclusive with `row` (otherwise ValueError is raised). Exactly one should be specified. When `dataframe` arg is specified then  FileDataFrameReader is returned.
+## Implementation Plan
 
-**Testing**:
-- Test `reader(dataframe=all_successful_rows, options=defaults)` with all successful rows and confirm each file was downloaded to a temp dir.
-- Test `reader(dataframe=partial_failure, options=defaults)` with some failing rows (missing files, permission errors)
-- Test mixed local and S3 sources with partial failures
-- Verify failed rows are properly dropped from results
-- Test empty DataFrame and DataFrame with all failed rows; when all rows fail then the reader should fail with a message to check error logs.
+### Step 1: Refactor existing write_files logic
+- Extract the core logic from `write_files()` into a new `_write_row()` function
+- This function will handle writing a single row of files
+- Keep the same validation and error handling logic
 
-## Planning
+### Step 2: Modify write_files() signature
+- Add `dataframe` as a new kwarg parameter
+- Make `row` and `dataframe` mutually exclusive (similar to reader())
+- Add proper validation for mutual exclusivity
+- When a dataframe is passed in, the output signature is a dataframe
 
-### High-level implementation plan:
+### Step 3: Implement DataFrame processing logic
+- When `dataframe` is provided, iterate through each row
+- For each row, call `_write_row()` with appropriate parameters
+- Handle errors gracefully - log failures and continue with next row
+- Collect successful results maintaining row correspondence
 
-1. **Create FileDataFrameReader class**:
-   - Constructor takes a pandas DataFrame and optional Options instance
-   - Store DataFrame as instance variable
-   - Implement `into_temp_dir()` method that yields temp directories
+### Step 4: Handle S3 support
+- Ensure S3 upload functionality works with DataFrame input
+- Pass options parameter through to support S3 credentials
+- Maintain proper path structure for S3 uploads
 
-2. **FileDataFrameReader.into_temp_dir() implementation**:
-   - Iterate through DataFrame rows
-   - For each row, convert to dict (excluding 'id' column if present)
-   - Create a Reader instance with the row dict
-   - Use Reader's into_temp_dir() in a try-except block
-   - If successful, yield the temp directory
-   - If fails, log error with row identifier (id column or index) and continue
-   - Track total rows vs successful rows
-   - If all rows fail, raise an exception with message to check error logs
+### Step 5: Error handling and logging
+- Log which rows failed and why (use 'id' column from DataFrame)
+- If all rows fail, raise FileDatasetError with appropriate message
+- Return a DataFrame that has an id column and all the successful files.
 
-3. **Update core.reader() function**:
-   - Add `dataframe` kwarg (keyword-only, optional)
-   - Check mutual exclusivity: exactly one of `row` or `dataframe` must be provided
-   - If `dataframe` is provided, return FileDataFrameReader instance
-   - If `row` is provided, return Reader instance (current behavior)
+## Testing
 
-4. **Logging strategy**:
-   - Use Python's logging module
-   - Log at WARNING level for row failures
-   - Include row identifier (id or index) in log messages
-   - Include the specific error message from FileDatasetError
-
-5. **Error handling**:
-   - Gracefully handle FileDatasetError from Reader.into_temp_dir()
-   - Continue processing other rows on failure
-   - Track failures and report summary at the end
-   - Raise exception only if ALL rows fail
-
-### Key design considerations:
-- FileDataFrameReader should accept same `options` parameter as Reader
-- The yielded temp directories should be handled as context managers
-- Each row should get its own isolated temporary directory
-- Maintain backward compatibility with existing reader() function
-- Use clear logging messages that help with debugging
-
-### Testing plan:
-1. Test with DataFrame where all rows have valid files
-2. Test with DataFrame containing some rows with missing files
-3. Test mixed local and S3 sources with some failures
-4. Test empty DataFrame (should work but yield nothing)
-5. Test DataFrame where all rows fail (should raise exception)
-6. Test that row identifiers (id column vs index) are logged correctly
-7. Test that Options are properly passed through to Reader instances
+### Test Cases
+1. **All successful rows** - Test writing DataFrame where all rows succeed
+2. **Partial failures** - Test with some rows having missing files or permission errors
+3. **Mixed destinations** - Test with both local and S3 destinations
+4. **Row isolation** - Verify one bad row doesn't affect others
+5. **Empty/all-failed** - Test empty DataFrame and all rows failing scenarios
+6. **S3 uploads** - Test S3 upload functionality with mocked S3 using moto
+7. **Return value format** - Verify correct mapping structure is returned

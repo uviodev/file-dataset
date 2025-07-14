@@ -109,7 +109,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test empty DataFrame and DataFrame with all failed rows; when all rows fail then the reader should fail with a message to check error logs.
 
 ## Task 7: Implement write_files support for DataFrames with partial failure handling
-**Status**: Not started
+**Status**: ✅ Completed
 **Description**: Extend write_files functionality to process multiple rows from DataFrames with graceful partial failure handling.
 
 **Requirements**:
@@ -168,6 +168,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 
 **Requirements**:
 - Implement `file_dataset.Pipeline(fn, write_options)` class
+- Add the code to a new file, pipeline.py. Use core and options primitives to implement
 - Make Pipeline callable with pandas DataFrame containing file URLs and IDs
 - Process each row: download files → call user function → upload results
 - Use separate temporary directories for each row to avoid disk space issues
