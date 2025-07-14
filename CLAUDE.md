@@ -35,7 +35,8 @@ To develop a new feature:
     d. Rerun the failing test to make sure it passes; continue changing the code until it passes.
     e. Confirm all tests pass (not just the previously failing one); fix any failing ones.
     f. Repeat the loop by adding a new test and then going through each instruction.
-7. Update any documentation in the src/ folder with hints or tips about the software usage.
+7. Do one last confirmation that the tests pass and the linting passes.
+8. Update any documentation in the src/ folder with hints or tips about the software usage.
 
 ## Development Commands
 The project uses the `uv` command. Prepend typical commands with `uv run` such as `uv run pytest` or `uv run python`.
