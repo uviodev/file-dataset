@@ -3,7 +3,7 @@ Cloud Blob Storage systems like S3 are often used as a File System. Developers w
 
 A file dataset is a pandas DataFrames where each column correspond to file names (e.g. image.mha), and each row for that column has an s3 url pointing to a file (e.g. s3://my-bucket/large_3d_image.mha).
 
-The file dataset is efficient when the file size is relatively large, where each row may contain one or more 100MB+ images or other blob formats. The file dataset is also convenient for smaller files because a file is intuitive to developers. 
+The file dataset is efficient when the file size is relatively large, where each row may contain one or more 100MB+ images or other blob formats. The file dataset is also convenient for smaller files because a file is intuitive to developers.
 
 Managing all these files can be cumbersome and subtle; the `file_dataset` library exists to simplify these s3 operations.
 
@@ -42,7 +42,7 @@ ResampledOutput = TypedDict(
     {
         "output.mha": Path,
     }
-)    
+)
 
 def resample_local_image_file(
     input_dir: Path,

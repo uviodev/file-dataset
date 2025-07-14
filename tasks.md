@@ -3,7 +3,7 @@
 This document outlines the implementation plan for the file-dataset library, progressing from simple local operations to full S3 and Ray integration.
 
 ## Task 1: Implement reader into_temp_dir for local directories
-**Status**: ✅ Completed  
+**Status**: ✅ Completed
 **Description**: Create basic reader functionality that copies files from a local directory to a temporary directory.
 
 **Requirements**:
@@ -19,7 +19,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test error handling for missing source files. When source files are not found then a clear exception should be raised.
 
 ## Task 2: Implement writer into_path for local directories
-**Status**: ✅ Completed  
+**Status**: ✅ Completed
 **Description**: Create basic writer functionality that copies files from one local directory to another with ID-based organization.
 
 **Requirements**:
@@ -39,7 +39,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test optional output (None value in output map) does not trigger
 
 ## Task 3: Implement simple Options class with S3 client caching
-**Status**: Not started  
+**Status**: Not started
 **Description**: Create Options class to manage S3 credentials and client creation with thread-safe caching.
 
 **Requirements**:
@@ -57,7 +57,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test s3transfer options (multipart threshold and multipart size can be configured)
 
 ## Task 4: Implement reader support for S3 data
-**Status**: Not started  
+**Status**: Not started
 **Description**: Extend reader functionality to download files from S3 to temporary directories.
 
 **Requirements**:
@@ -74,7 +74,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test with different S3 credentials configurations
 
 ## Task 5: Implement writer support for S3 uploads
-**Status**: Not started  
+**Status**: Not started
 **Description**: Extend writer functionality to upload files to S3 with proper path organization.
 
 **Requirements**:
@@ -92,7 +92,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test return value format with S3 URLs
 
 ## Task 6: Implement reader support for DataFrames with partial failure handling
-**Status**: Not started  
+**Status**: Not started
 **Description**: Extend reader functionality to process pandas DataFrames with graceful handling of row-level failures.
 
 **Requirements**:
@@ -113,7 +113,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test empty DataFrame and DataFrame with all failed rows
 
 ## Task 7: Implement write_files support for DataFrames with partial failure handling
-**Status**: Not started  
+**Status**: Not started
 **Description**: Extend write_files functionality to process multiple rows from DataFrames with graceful partial failure handling.
 
 **Requirements**:
@@ -133,7 +133,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test empty input and all-failed scenarios
 
 ## Task 8: Implement reader support for PyArrow size table
-**Status**: Not started  
+**Status**: Not started
 **Description**: Add functionality to create PyArrow tables containing file size metadata without downloading the actual files.
 
 **Requirements**:
@@ -150,7 +150,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test PyArrow table schema and data types
 
 ## Task 9: Implement reader support for PyArrow blob table
-**Status**: Not started  
+**Status**: Not started
 **Description**: Add functionality to load file contents directly into PyArrow tables as binary data.
 
 **Requirements**:
@@ -167,7 +167,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test memory usage with multiple files
 
 ## Task 10: Implement Pipeline class
-**Status**: Not started  
+**Status**: Not started
 **Description**: Create Pipeline class that combines read → process → write workflow for batch processing of file datasets.
 
 **Requirements**:
@@ -188,7 +188,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test temporary directory cleanup
 
 ## Task 11: Test Pipeline with local Ray data integration
-**Status**: Not started  
+**Status**: Not started
 **Description**: Verify Pipeline class works correctly with Ray's map_batches functionality for distributed processing.
 
 **Requirements**:
@@ -206,7 +206,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test error handling in distributed environment
 
 ## Task 12: Implement custom Ray data source for blob tables
-**Status**: Not started  
+**Status**: Not started
 **Description**: Create Ray data source that efficiently loads file datasets into cluster memory as blob tables.
 
 **Requirements**:
@@ -241,7 +241,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 ### Dependencies
 Key dependencies to add as implementation progresses:
 - `boto3` for S3 operations
-- `pyarrow` for table operations  
+- `pyarrow` for table operations
 - `pandas` for DataFrame handling
 - `ray` for distributed computing
 - `moto` for S3 testing (dev dependency)

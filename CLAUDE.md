@@ -25,10 +25,10 @@ To develop a new feature:
 2. Erase everything in feature_plan.md.
 3. Copy the task in progress (from step 1) into `feature_plan.md`.
 4. Plan the functionality to be added and update `feature_plan.md` accordingly.
-    * Taking into account understanding of the codebase and README.md, plan the code changes to make at a high level. 
+    * Taking into account understanding of the codebase and README.md, plan the code changes to make at a high level.
     * Think of a few high level test cases. Add these to a section called `testing`
-5. Ask any clarifying questions. Only continue once questions are answered.
-6. Implement the feature using red-green refactor loop.
+5. Ask any clarifying questions. Only continue once questions are answered. Ensure feature_plan.md has removed questions and replaced the questions with answers.
+6. Once feature_plan.md has been finalized, implement the feature using red-green refactor loop.
     a. Add a simple test for the code. Run the test and confirm it is failing due to code within the file_dataset library.
     b. Implement a code change to make the test pass.
     c. Run the linter to ensure there are no basic mistakes
