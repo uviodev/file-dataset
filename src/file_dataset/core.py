@@ -1,5 +1,6 @@
 """Core file dataset operations."""
 
+import re
 import shutil
 import tempfile
 from collections.abc import Generator
@@ -7,18 +8,115 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .exceptions import FileDatasetError
+from .options import Options
+
+
+def _parse_s3_url(url: str) -> tuple[str, str] | None:
+    """Parse S3 URL into bucket and key.
+
+    Args:
+        url: URL to parse
+
+    Returns:
+        Tuple of (bucket, key) if valid S3 URL, None otherwise
+    """
+    match = re.match(r"^s3://([^/]+)/(.+)$", url)
+    if match:
+        return match.group(1), match.group(2)
+    return None
+
+
+def _is_s3_url(path: str | Path) -> bool:
+    """Check if path is an S3 URL.
+
+    Args:
+        path: Path to check
+
+    Returns:
+        True if path starts with s3://, False otherwise
+    """
+    return str(path).startswith("s3://")
 
 
 class Reader:
     """Handles reading files from local filesystem with context manager support."""
 
-    def __init__(self, files_dict: dict[str, str | Path]) -> None:
+    def __init__(
+        self, files_dict: dict[str, str | Path], options: Options | None = None
+    ) -> None:
         """Initialize Reader with files dictionary.
 
         Args:
             files_dict: Dictionary mapping filenames to their source paths
+            options: Optional Options instance for S3 operations
         """
         self.files_dict = files_dict
+        self.options = options
+
+    def _validate_s3_file(self, filename: str, source_str: str) -> str | None:  # noqa: ARG002
+        """Validate a single S3 file.
+
+        Args:
+            filename: The filename being validated
+            source_str: The S3 URL string
+
+        Returns:
+            Error message if validation fails, None if successful
+        """
+        # Validate S3 URL format
+        parsed = _parse_s3_url(source_str)
+        if not parsed:
+            return f"Invalid S3 URL format: {source_str}"
+
+        # Check if options are provided for S3
+        if self.options is None:
+            return "Options required for S3 URLs but not provided"
+
+        # Validate S3 object exists using HEAD request
+        bucket, key = parsed
+        try:
+            self.options.s3_client.head_object(Bucket=bucket, Key=key)
+        except Exception as e:  # noqa: BLE001
+            # Check for 404 error (object not found)
+            if (
+                hasattr(e, "response")
+                and e.response.get("Error", {}).get("Code") == "404"
+            ):
+                return f"S3 object not found: {source_str}"
+            return f"S3 access error: {e}"
+
+        return None
+
+    def _validate_files(self) -> dict[str, str]:
+        """Validate all files exist and are accessible.
+
+        Returns:
+            Dictionary of filename to error message for any validation failures
+        """
+        file_errors: dict[str, str] = {}
+        has_s3_files = False
+
+        for filename, source_path in self.files_dict.items():
+            source_str = str(source_path)
+
+            if _is_s3_url(source_str):
+                has_s3_files = True
+                error = self._validate_s3_file(filename, source_str)
+                if error:
+                    file_errors[filename] = error
+            else:
+                # Local file validation
+                source = Path(source_path)
+                if not source.exists():
+                    file_errors[filename] = f"Source file not found: {source}"
+                elif not source.is_file():
+                    file_errors[filename] = f"Source path is not a file: {source}"
+
+        # Check if we have S3 URLs but no options
+        if has_s3_files and self.options is None and not file_errors:
+            file_errors["__options__"] = "Options required for S3 URLs but not provided"
+
+        return file_errors
 
     @contextmanager
     def into_temp_dir(self) -> Generator[Path, None, None]:
@@ -31,14 +129,7 @@ class Reader:
             FileDatasetError: If any files cannot be copied
         """
         # Validate all files exist before starting copy operation
-        file_errors: dict[str, str] = {}
-
-        for filename, source_path in self.files_dict.items():
-            source = Path(source_path)
-            if not source.exists():
-                file_errors[filename] = f"Source file not found: {source}"
-            elif not source.is_file():
-                file_errors[filename] = f"Source path is not a file: {source}"
+        file_errors = self._validate_files()
 
         if file_errors:
             raise FileDatasetError(
@@ -51,13 +142,22 @@ class Reader:
 
             # Copy each file to temp directory with original filename
             for filename, source_path in self.files_dict.items():
-                source = Path(source_path)
+                source_str = str(source_path)
                 dest = temp_dir / filename
 
                 try:
-                    shutil.copy2(source, dest)
+                    if _is_s3_url(source_str):
+                        # Download from S3
+                        bucket, key = _parse_s3_url(source_str)
+                        self.options.s3_client.download_file(bucket, key, str(dest))
+                    else:
+                        # Local file copy
+                        source = Path(source_path)
+                        shutil.copy2(source, dest)
                 except OSError as e:
                     file_errors[filename] = f"Failed to copy file: {e}"
+                except Exception as e:  # noqa: BLE001
+                    file_errors[filename] = f"Failed to download file: {e}"
 
             # If any copies failed, raise error
             if file_errors:
@@ -66,16 +166,17 @@ class Reader:
             yield temp_dir
 
 
-def reader(*, row: dict[str, str | Path]) -> Reader:
+def reader(*, row: dict[str, str | Path], options: Options | None = None) -> Reader:
     """Create a Reader instance for the given files.
 
     Args:
         row: Dictionary mapping filenames to their source paths (keyword-only)
+        options: Optional Options instance for S3 operations (keyword-only)
 
     Returns:
         Reader instance
     """
-    return Reader(row)
+    return Reader(row, options)
 
 
 def _validate_source_files(row: dict[str, str | Path | None]) -> dict[str, str]:

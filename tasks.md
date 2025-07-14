@@ -57,7 +57,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test s3transfer options (multipart threshold and multipart size can be configured)
 
 ## Task 4: Implement reader support for S3 data
-**Status**: Not started
+**Status**: ✅ Completed
 **Description**: Extend reader functionality to download files from S3 to temporary directories.
 
 **Requirements**:

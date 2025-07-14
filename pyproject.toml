@@ -103,6 +103,7 @@ ignore = [
     "S301",    # pickle usage is being tested
     "SLF001",  # accessing private members is necessary in tests
     "PLR2004", # magic values are fine in tests
+    "SIM117",  # nested with statements are clearer in tests
 ]
 "src/file_dataset/scripts.py" = ["S603"]  # subprocess is safe here - using sys.executable
 
