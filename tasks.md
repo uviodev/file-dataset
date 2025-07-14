@@ -91,7 +91,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test error handling for S3 permissions
 - Test return value format with S3 URLs
 
-## Task 5.1: Implement reader support for DataFrames with partial failure handling
+## Task 6: Implement reader support for DataFrames with partial failure handling
 **Status**: Not started  
 **Description**: Extend reader functionality to process pandas DataFrames with graceful handling of row-level failures.
 
@@ -112,7 +112,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test error logging/tracking functionality
 - Test empty DataFrame and DataFrame with all failed rows
 
-## Task 5.2: Implement write_files support for DataFrames with partial failure handling
+## Task 7: Implement write_files support for DataFrames with partial failure handling
 **Status**: Not started  
 **Description**: Extend write_files functionality to process multiple rows from DataFrames with graceful partial failure handling.
 
@@ -132,7 +132,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test row-level failure isolation (one bad row doesn't affect others)
 - Test empty input and all-failed scenarios
 
-## Task 6: Implement reader support for PyArrow size table
+## Task 8: Implement reader support for PyArrow size table
 **Status**: Not started  
 **Description**: Add functionality to create PyArrow tables containing file size metadata without downloading the actual files.
 
@@ -149,7 +149,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test error handling for missing files
 - Test PyArrow table schema and data types
 
-## Task 7: Implement reader support for PyArrow blob table
+## Task 9: Implement reader support for PyArrow blob table
 **Status**: Not started  
 **Description**: Add functionality to load file contents directly into PyArrow tables as binary data.
 
@@ -166,7 +166,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test PyArrow table schema and binary data integrity
 - Test memory usage with multiple files
 
-## Task 8: Implement Pipeline class
+## Task 10: Implement Pipeline class
 **Status**: Not started  
 **Description**: Create Pipeline class that combines read → process → write workflow for batch processing of file datasets.
 
@@ -187,7 +187,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test pickle serialization of Pipeline objects
 - Test temporary directory cleanup
 
-## Task 9: Test Pipeline with local Ray data integration
+## Task 11: Test Pipeline with local Ray data integration
 **Status**: Not started  
 **Description**: Verify Pipeline class works correctly with Ray's map_batches functionality for distributed processing.
 
@@ -205,7 +205,7 @@ This document outlines the implementation plan for the file-dataset library, pro
 - Test resource cleanup after Ray jobs complete
 - Test error handling in distributed environment
 
-## Task 10: Implement custom Ray data source for blob tables
+## Task 12: Implement custom Ray data source for blob tables
 **Status**: Not started  
 **Description**: Create Ray data source that efficiently loads file datasets into cluster memory as blob tables.
 
