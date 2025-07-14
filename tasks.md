@@ -3,7 +3,7 @@
 This document outlines the implementation plan for the file-dataset library, progressing from simple local operations to full S3 and Ray integration.
 
 ## Task 1: Implement reader into_temp_dir for local directories
-**Status**: Not started  
+**Status**: ✅ Completed  
 **Description**: Create basic reader functionality that copies files from a local directory to a temporary directory.
 
 **Requirements**:
