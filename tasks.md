@@ -138,7 +138,25 @@ Remove the separate kwargs and make the API more intuitive by using type-based d
 - Test both local and S3 destinations work with the unified API
 
 
-## Task 8: Add Parallel File Operations Support
+## Task 8: Rename Options to S3Options for Clarity
+**Status:** Not Started
+**Priority:** Medium
+**Dependencies:** Task 7 (Simplify write_files API)
+
+**Summary:** Rename Options class to S3Options and rename options.py to s3_options.py for clarity.
+
+**Description:**
+The generic name "Options" doesn't clearly indicate its purpose for S3 configuration. Rename the Options class to S3Options to make its purpose explicit. Also rename the options.py file to s3_options.py for consistency. Update all imports and references throughout the codebase to use the new naming.
+
+**High-Level Test Descriptions:**
+- Test that S3Options class maintains all functionality of the original Options class
+- Test import statements and public API access work with new naming
+- Test class instantiation and method calls with S3Options name
+- Test that s3_options.py module can be imported correctly
+- Regression tests to verify all existing Options functionality works with new class name
+- Test integration with reader, writer, and pipeline components using S3Options
+
+## Task 9: Add Parallel File Operations Support
 **Status:** Not Started
 **Priority:** Low
 
@@ -156,7 +174,7 @@ Add parallel processing capabilities for file operations using ThreadPoolExecuto
 
 
 
-## Task 9: Improve Memory Management for Large Files
+## Task 10: Improve Memory Management for Large Files
 **Status:** Not Started
 **Priority:** High
 **Dependencies:** Task 7 (Progress reporting)
