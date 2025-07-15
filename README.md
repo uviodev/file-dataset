@@ -65,8 +65,11 @@ Note that because the core logic is just python, the user could easily embed arb
 File dataset can download data
 
 ```python
+import file_dataset
+
 s3_data = {"image.mha": "s3://my-bucket/image.mha"}
-with file_dataset.reader(row=s3_data).into_temp_dir() as tmp:
+options = file_dataset.Options.default()
+with file_dataset.reader(row=s3_data, options=options).into_temp_dir() as tmp:
     # Tmp contains a file: image.mha
     # for simplicty we set input=output though
     # general consumers may prefer two distinct temp paths.
@@ -82,15 +85,20 @@ Uploading data requires a user-defined ID.
 
 
 ```python
+import file_dataset
+from pathlib import Path
+
 local_output = {
     "resampled_image.mha": Path("./resampled_image.mha")
 }
-file_dataset.write_files(
+options = file_dataset.Options.default()
+result = file_dataset.write_files(
     local_output,
     into_path="s3://my-bucket/resampled/",
-    id="1"
+    id="1",
+    options=options
 )
-# Returns: {"image.mha": "s3://my-bucket/resampled/1/image.mha"}
+# Returns: {"resampled_image.mha": "s3://my-bucket/resampled/1/resampled_image.mha"}
 # S3 Object contains the local contents
 ```
 
@@ -100,12 +108,12 @@ If one provides a local path then the temp files will be copied locally (rather 
 local_output = {
     "resampled_image.mha": Path("./resampled_image.mha")
 }
-file_dataset.write_files(
+result = file_dataset.write_files(
     local_output,
     into_path="./resampled/",
     id="1"
 )
-# Returns: {"image.mha": Path("./resampled/1/image.mha")}
+# Returns: {"resampled_image.mha": Path("./resampled/1/resampled_image.mha")}
 ```
 
 ## Usage 3: Implement a Pipeline over Data frames
@@ -117,7 +125,10 @@ To avoid out of disk errors, a new temporary directory is used for each row.
 
 
 ```python
-file_dataframe = pandas.DataFrame({
+import pandas as pd
+import file_dataset
+
+file_dataframe = pd.DataFrame({
     "image.mha": [
         "s3://my-bucket/image1.mha",
         "s3://my-bucket/image2.mha",
@@ -127,22 +138,21 @@ file_dataframe = pandas.DataFrame({
     ]
 })
 
+options = file_dataset.Options.default()
 pipeline = file_dataset.Pipeline(
     fn=resample_local_image_file,
-    write_options={
-        "into_path": "s3://my-bucket/resampled/"
-    })
+    into_path="s3://my-bucket/resampled/",
+    options=options
+)
 output_dataframe = pipeline(file_dataframe)
 output_dataframe
 # Has contents:
-# pandas.DataFrame({
+# pd.DataFrame({
+#    "id": ["1", "2", "3"],
 #    "output.mha": [
 #        "s3://my-bucket/resampled/1/output.mha",
 #        "s3://my-bucket/resampled/2/output.mha",
-#        "s3://my-bucket/resampled/3/output.mha"],
-#    "id": [
-#        1, 2, 3
-#    ]
+#        "s3://my-bucket/resampled/3/output.mha"]
 # })
 ```
 
@@ -153,14 +163,18 @@ Note that the output of this pipeline is a data frame can now be compatible with
 The Pipeline is pickle-able and it can be passed to a Ray Dataset's `map_batches` function when the batch format is Pandas. See [map_batches](https://docs.ray.io/en/latest/data/api/doc/ray.data.Dataset.map_batches.html#ray.data.Dataset.map_batches)
 
 ```python
+import ray.data
+import file_dataset
+
 # inputs_in_s3.csv contains "image.mha" column and "id" columns.
 dataset = ray.data.read_csv("inputs_in_s3.csv")
+options = file_dataset.Options.default()
 resampled_dataset = dataset.map_batches(
     file_dataset.Pipeline(
         fn=resample_local_image_file,
-        write_options={
-            "into_path": "s3://my-bucket/resampled/"
-        }),
+        into_path="s3://my-bucket/resampled/",
+        options=options
+    ),
     batch_format="pandas",
     batch_size=8, # Or however many you'd like per batch.
     # Specify distribution options:
@@ -182,10 +196,18 @@ This data can be then loaded into a PyArrow table. The blob data in s3 is fetche
 
 
 ```python
+import file_dataset
+import pandas as pd
+
 # Assume a 1MB s3 object `image_mask.mha`.
-s3_data = {"image.mha": "s3://my-bucket/image_mask.mha"}
-pyarrow_table = file_dataset.reader(dataframe=s3_data).into_blob_table()
-pyarrow_table.schema()  # {"image.mha": pa.binary()}
+s3_dataframe = pd.DataFrame({
+    "id": ["row1"],
+    "image.mha": ["s3://my-bucket/image_mask.mha"]
+})
+options = file_dataset.Options.default()
+pyarrow_table = file_dataset.reader(dataframe=s3_dataframe, options=options).into_blob_table()
+pyarrow_table.schema
+# Schema with fields: id: string, image.mha: binary
 # has 1 row, which is 1MB in size
 ```
 
@@ -193,10 +215,15 @@ To avoid memory errors, the user may also load some metadata about the data firs
 
 ```python
 # Assume a 1MB s3 object `image_mask.mha`.
-s3_data = {"image.mha": "s3://my-bucket/image_mask.mha"}
-pyarrow_table = file_dataset.reader(row=s3_data).into_size_table()
-pyarrow_table.schema()  # {"image.mha": pa.int32()}
-# has 1 row, which has `{"image.mha": 1MB}`
+s3_dataframe = pd.DataFrame({
+    "id": ["row1"],
+    "image.mha": ["s3://my-bucket/image_mask.mha"]
+})
+options = file_dataset.Options.default()
+pyarrow_table = file_dataset.reader(dataframe=s3_dataframe, options=options).into_size_table()
+pyarrow_table.schema
+# Schema with fields: id: string, image.mha: int64
+# has 1 row, which has `{"id": "row1", "image.mha": 1048576}` (size in bytes)
 ```
 
 TIP: to load a file dataset into a Ray dataset use the optimized dataset reader.
@@ -206,9 +233,13 @@ Users may load their data frames into a blob dataset.
 
 
 ```python
-dataset = file_dataset.ray.blob_reader(
-    files_dataframe, batch_size=4,
-    options=file_dataset.Options.default())
+import file_dataset.ray
+
+dataset = file_dataset.ray.read_file_dataset(
+    files_dataframe,
+    batch_size=4,
+    options=file_dataset.Options.default()
+)
 ```
 
 Under the hood, this function reads a data source that [creates a read task](https://docs.ray.io/en/latest/data/api/doc/ray.data.Datasource.get_read_tasks.html) for every `batch_size` rows to be read together. The file dataset uses `into_size_table` to estimate the in-memory dataset size for the first batch and assumes the estimate is good for the whole dataset. The dataset returns only binary data which the user may then re-interpret.
@@ -218,13 +249,28 @@ TIP: when the user calls `map_batches` on this Ray dataset, consider using zero 
 TIP: If the object files are small, consider writing the data to parquet then simply reading the parquet files directly; this will be more efficient for small files but be significantly worse for large image files.
 
 ## S3 credentials management
-All reader and write functions take as input `file_dataset.Options` which allows the user to specify options.
+All reader and write functions take as input `file_dataset.Options` which allows the user to specify S3 configuration.
 
 The default options (`file_dataset.Options.default()`):
 
-* Use `adaptive` retry mode for boto3 session configuration
-* Serialize the frozen_credentials of the default boto3 session into the Options
+* Use `adaptive` retry mode for boto3 session configuration with 3 max attempts
+* Serialize the frozen credentials from the default boto3 session into the Options
+* Support custom multipart upload thresholds and chunk sizes
 
-These defaults optimize for Ray where the head node can spin up many ec2 instances downstream to do the actual work
+These defaults optimize for Ray where the head node can spin up many EC2 instances downstream to do the actual work.
 
-The dataset Options must always be serializable as Pickle objects, so they contain session_kwargs for the `boto3.Session()` object, and s3_client_kwargs for the `session.client("s3")` call. They lazily create this boto3 session and s3 client upon first usage (in a thread safe way) to support reusing one s3 client for each thread for maximum performance.
+The Options class is designed to be serializable as Pickle objects, containing session_kwargs for the `boto3.Session()` object and s3_client_kwargs for the `session.client("s3")` call. It lazily creates the boto3 session and S3 client upon first usage in a thread-safe way to support reusing one S3 client per thread for maximum performance.
+
+Example:
+```python
+import file_dataset
+
+# Use default options
+options = file_dataset.Options.default()
+
+# Or create custom options with specific multipart settings
+options = file_dataset.Options.default(
+    multipart_threshold=64 * 1024 * 1024,  # 64MB
+    multipart_chunksize=16 * 1024 * 1024   # 16MB
+)
+```
