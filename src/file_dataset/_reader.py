@@ -11,7 +11,7 @@ import pandas as pd
 import pyarrow as pa
 
 from .exceptions import FileDatasetError
-from .options import Options
+from .s3_options import S3Options
 from .s3_utils import is_s3_url, parse_s3_url
 
 logger = logging.getLogger(__name__)
@@ -21,20 +21,20 @@ class FileRowReader:
     """Handles reading files from local filesystem with context manager support."""
 
     def __init__(
-        self, files_dict: dict[str, str | Path], options: Options | None = None
+        self, files_dict: dict[str, str | Path], options: S3Options | None = None
     ) -> None:
         """Initialize FileRowReader with files dictionary.
 
         Args:
             files_dict: Dictionary mapping filenames to their source paths
-            options: Optional Options instance for S3 operations
-                (defaults to Options.default())
+            options: Optional S3Options instance for S3 operations
+                (defaults to S3Options.default())
         """
         self.files_dict = files_dict
         # Initialize default options if none provided and S3 files are present
         has_s3_files = any(is_s3_url(str(path)) for path in files_dict.values())
         if options is None and has_s3_files:
-            self.options = Options.default()
+            self.options = S3Options.default()
         else:
             self.options = options
 
@@ -57,9 +57,9 @@ class FileRowReader:
         if not key:  # FileRowReader needs a key to read a file
             return f"Invalid S3 URL format: {source_str}"
 
-        # Options should already be initialized in __init__ if needed
+        # S3Options should already be initialized in __init__ if needed
         if self.options is None:
-            return "Options required for S3 URLs but not provided"
+            return "S3Options required for S3 URLs but not provided"
 
         # Validate S3 object exists using HEAD request
         try:
@@ -102,7 +102,9 @@ class FileRowReader:
 
         # Check if we have S3 URLs but no options (shouldn't happen with eager init)
         if has_s3_files and self.options is None and not file_errors:
-            file_errors["__options__"] = "Options required for S3 URLs but not provided"
+            file_errors["__options__"] = (
+                "S3Options required for S3 URLs but not provided"
+            )
 
         return file_errors
 
@@ -157,19 +159,21 @@ class FileRowReader:
 class FileDataFrameReader:
     """Handles reading files from DataFrames with row-level error handling."""
 
-    def __init__(self, dataframe: pd.DataFrame, options: Options | None = None) -> None:
+    def __init__(
+        self, dataframe: pd.DataFrame, options: S3Options | None = None
+    ) -> None:
         """Initialize FileDataFrameReader with a DataFrame.
 
         Args:
             dataframe: DataFrame where each row represents files to process
-            options: Optional Options instance for S3 operations
-                (defaults to Options.default())
+            options: Optional S3Options instance for S3 operations
+                (defaults to S3Options.default())
         """
         self.dataframe = dataframe
         # Initialize default options if none provided and S3 files are present
         has_s3_files = self._dataframe_has_s3_files(dataframe)
         if options is None and has_s3_files:
-            self.options = Options.default()
+            self.options = S3Options.default()
         else:
             self.options = options
 
@@ -558,13 +562,13 @@ class FileDataFrameReader:
 
 
 def row_reader(
-    row: dict[str, str | Path], options: Options | None = None
+    row: dict[str, str | Path], options: S3Options | None = None
 ) -> FileRowReader:
     """Create a FileRowReader instance for the given row of files.
 
     Args:
         row: Dictionary mapping filenames to their source paths
-        options: Optional Options instance for S3 operations
+        options: Optional S3Options instance for S3 operations
 
     Returns:
         FileRowReader instance
@@ -573,13 +577,13 @@ def row_reader(
 
 
 def file_dataframe_reader(
-    dataframe: pd.DataFrame, options: Options | None = None
+    dataframe: pd.DataFrame, options: S3Options | None = None
 ) -> FileDataFrameReader:
     """Create a FileDataFrameReader instance for the given DataFrame.
 
     Args:
         dataframe: DataFrame where each row contains files to process
-        options: Optional Options instance for S3 operations
+        options: Optional S3Options instance for S3 operations
 
     Returns:
         FileDataFrameReader instance

@@ -1,15 +1,15 @@
-"""Tests for the Options class."""
+"""Tests for the S3Options class."""
 
 import pickle
 import threading
 
 from moto import mock_aws
 
-from file_dataset import Options
+from file_dataset import S3Options
 
 
 def test_options_default_creation(mocker):
-    """Test creating Options with default settings."""
+    """Test creating S3Options with default settings."""
     mock_session = mocker.patch("boto3.Session")
     mock_frozen_creds = mocker.MagicMock()
     mock_frozen_creds.access_key = "test_key"
@@ -20,7 +20,7 @@ def test_options_default_creation(mocker):
     mock_credentials.get_frozen_credentials.return_value = mock_frozen_creds
     mock_session.return_value.get_credentials.return_value = mock_credentials
 
-    options = Options.default()
+    options = S3Options.default()
 
     assert options is not None
     assert hasattr(options, "_session_kwargs")
@@ -34,7 +34,7 @@ def test_options_default_creation(mocker):
 @mock_aws
 def test_s3_client_lazy_initialization():
     """Test that S3 client is created lazily on first access."""
-    options = Options.default()
+    options = S3Options.default()
 
     # Client should not exist yet
     assert not hasattr(options, "_s3_client") or options._s3_client is None
@@ -49,7 +49,7 @@ def test_s3_client_lazy_initialization():
 
 
 def test_options_pickle_serialization(mocker):
-    """Test that Options can be pickled and unpickled."""
+    """Test that S3Options can be pickled and unpickled."""
     mock_session = mocker.patch("boto3.Session")
     mock_frozen_creds = mocker.MagicMock()
     mock_frozen_creds.access_key = "test_key"
@@ -60,7 +60,7 @@ def test_options_pickle_serialization(mocker):
     mock_credentials.get_frozen_credentials.return_value = mock_frozen_creds
     mock_session.return_value.get_credentials.return_value = mock_credentials
 
-    options = Options.default()
+    options = S3Options.default()
 
     # Pickle and unpickle
     pickled = pickle.dumps(options)
@@ -79,7 +79,7 @@ def test_options_pickle_serialization(mocker):
 
 def test_options_thread_safety():
     """Test that S3 client creation is thread-safe."""
-    options = Options.default()
+    options = S3Options.default()
     clients = []
 
     def get_client():
@@ -115,7 +115,7 @@ def test_s3_transfer_config(mocker):
     mock_session.return_value.get_credentials.return_value = mock_credentials
 
     # Test with custom transfer config
-    options = Options.default(
+    options = S3Options.default(
         multipart_threshold=1024 * 1024 * 10,  # 10MB
         multipart_chunksize=1024 * 1024 * 5,  # 5MB
     )
@@ -137,7 +137,7 @@ def test_adaptive_retry_config(mocker):
     mock_credentials.get_frozen_credentials.return_value = mock_frozen_creds
     mock_session.return_value.get_credentials.return_value = mock_credentials
 
-    options = Options.default()
+    options = S3Options.default()
 
     # Check s3_client_kwargs has correct retry config
     assert "config" in options._s3_client_kwargs

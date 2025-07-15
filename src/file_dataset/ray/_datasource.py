@@ -12,7 +12,7 @@ from ray.data.block import BlockMetadata
 
 from file_dataset._reader import file_dataframe_reader
 from file_dataset.file_dataframe import get_file_columns
-from file_dataset.options import Options
+from file_dataset.s3_options import S3Options
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +31,7 @@ class FileDataFrameAsBlobDatasource(ray.data.Datasource):
     """
 
     def __init__(
-        self,
-        file_dataframe: "pd.DataFrame",
-        batch_size: int,
-        options: Options | None = None,
+        self, file_dataframe: "pd.DataFrame", batch_size: int, options: S3Options
     ) -> None:
         """Initialize datasource with file DataFrame configuration.
 

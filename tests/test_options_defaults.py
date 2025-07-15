@@ -1,4 +1,4 @@
-"""Test that Options default behavior works correctly."""
+"""Test that S3Options default behavior works correctly."""
 
 import contextlib
 from unittest.mock import patch
@@ -40,10 +40,10 @@ def test_reader_s3_without_options_uses_defaults():
 
 def test_explicit_options_override_defaults():
     """Test that explicitly provided options override defaults."""
-    from file_dataset import Options
+    from file_dataset import S3Options
 
     # Create custom options
-    custom_options = Options.default()
+    custom_options = S3Options.default()
 
     # Should use the provided options, not defaults
     reader = file_dataset.row_reader(
@@ -113,11 +113,11 @@ def test_options_initialized_eagerly_and_shared():
 
     import pandas as pd
 
-    # Mock Options.default() to track calls
+    # Mock S3Options.default() to track calls
     mock_options = MagicMock()
 
     with patch(
-        "file_dataset._reader.Options.default", return_value=mock_options
+        "file_dataset._reader.S3Options.default", return_value=mock_options
     ) as mock_default:
         # Create DataFrame with multiple S3 files
         df = pd.DataFrame(
@@ -128,10 +128,10 @@ def test_options_initialized_eagerly_and_shared():
             }
         )
 
-        # Create reader - should call Options.default() once
+        # Create reader - should call S3Options.default() once
         reader = file_dataset.file_dataframe_reader(df)
 
-        # Verify Options.default() was called exactly once during initialization
+        # Verify S3Options.default() was called exactly once during initialization
         assert mock_default.call_count == 1
 
         # Verify the reader has the mocked options
@@ -143,13 +143,13 @@ def test_options_initialized_eagerly_and_shared():
         # Multiple operations should not create new options
         with contextlib.suppress(Exception):
             # These would normally fail due to network, but should not call
-            # Options.default() again
+            # S3Options.default() again
             reader.into_size_table()
 
         with contextlib.suppress(Exception):
             reader.into_blob_table()
 
-        # Options.default() should not have been called again
+        # S3Options.default() should not have been called again
         assert mock_default.call_count == 0
 
 
@@ -160,11 +160,11 @@ def test_filerowreader_options_initialized_eagerly():
     mock_options = MagicMock()
 
     with patch(
-        "file_dataset._reader.Options.default", return_value=mock_options
+        "file_dataset._reader.S3Options.default", return_value=mock_options
     ) as mock_default:
         # Create reader with S3 files
         reader = file_dataset.row_reader({"file1.txt": "s3://bucket/file1.txt"})
 
-        # Verify Options.default() was called exactly once
+        # Verify S3Options.default() was called exactly once
         assert mock_default.call_count == 1
         assert reader.options is mock_options

@@ -87,7 +87,7 @@ class TestRayDatasource:
         dataset = read_file_dataset(
             file_dataframe=sample_file_dataframe,
             batch_size=2,
-            options=file_dataset.Options.default(),
+            options=file_dataset.S3Options.default(),
         )
 
         # Verify dataset was created
@@ -165,7 +165,7 @@ class TestRayDatasource:
         dataset = read_file_dataset(
             file_dataframe=sample_file_dataframe,
             batch_size=2,
-            options=file_dataset.Options.default(),
+            options=file_dataset.S3Options.default(),
         )
 
         # Collect results
@@ -223,7 +223,7 @@ class TestRayDatasource:
         dataset = read_file_dataset(
             file_dataframe=df,
             batch_size=2,
-            options=file_dataset.Options.default(),
+            options=file_dataset.S3Options.default(),
         )
 
         # Collect results - should only have successful rows
@@ -249,7 +249,7 @@ class TestRayDatasource:
         dataset = read_file_dataset(
             file_dataframe=large_file_dataframe,
             batch_size=batch_size,
-            options=file_dataset.Options.default(),
+            options=file_dataset.S3Options.default(),
         )
 
         # Process dataset in chunks to avoid loading everything into memory
@@ -278,7 +278,7 @@ class TestRayDatasource:
         datasource = FileDataFrameAsBlobDatasource(
             file_dataframe=sample_file_dataframe,
             batch_size=2,
-            options=file_dataset.Options.default(),
+            options=file_dataset.S3Options.default(),
         )
 
         # Test memory estimation
@@ -300,7 +300,7 @@ class TestRayDatasource:
         datasource = FileDataFrameAsBlobDatasource(
             file_dataframe=sample_file_dataframe,
             batch_size=2,
-            options=file_dataset.Options.default(),
+            options=file_dataset.S3Options.default(),
         )
 
         # Get read tasks (parallelism should be ignored)
@@ -322,7 +322,7 @@ class TestRayDatasource:
         dataset = read_file_dataset(
             file_dataframe=sample_file_dataframe,
             batch_size=5,  # Single batch
-            options=file_dataset.Options.default(),
+            options=file_dataset.S3Options.default(),
         )
 
         # Convert to Arrow table for zero-copy testing
@@ -348,7 +348,7 @@ class TestRayDatasource:
         dataset = read_file_dataset(
             file_dataframe=sample_file_dataframe,
             batch_size=2,
-            options=file_dataset.Options.default(),
+            options=file_dataset.S3Options.default(),
         )
 
         # Apply Ray transformations

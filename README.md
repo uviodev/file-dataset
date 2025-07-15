@@ -239,17 +239,17 @@ TIP: when the user calls `map_batches` on this Ray dataset, consider using zero 
 TIP: If the object files are small, consider writing the data to parquet then simply reading the parquet files directly; this will be more efficient for small files but be significantly worse for large image files.
 
 ## S3 credentials management
-All reader and write functions take as input `file_dataset.Options` which allows the user to specify S3 configuration. When no options are provided, the library automatically uses `file_dataset.Options.default()` for S3 operations.
+All reader and write functions take as input `file_dataset.S3Options` which allows the user to specify S3 configuration. When no options are provided, the library automatically uses `file_dataset.S3Options.default()` for S3 operations.
 
-The default options (`file_dataset.Options.default()`):
+The default options (`file_dataset.S3Options.default()`):
 
 * Use `adaptive` retry mode for boto3 session configuration with 3 max attempts
-* Serialize the frozen credentials from the default boto3 session into the Options
+* Serialize the frozen credentials from the default boto3 session into the S3Options
 * Support custom multipart upload thresholds and chunk sizes
 
 These defaults optimize for Ray where the head node can spin up many EC2 instances downstream to do the actual work.
 
-The Options class is designed to be serializable as Pickle objects, containing session_kwargs for the `boto3.Session()` object and s3_client_kwargs for the `session.client("s3")` call. It lazily creates the boto3 session and S3 client upon first usage in a thread-safe way to support reusing one S3 client per thread for maximum performance.
+The S3Options class is designed to be serializable as Pickle objects, containing session_kwargs for the `boto3.Session()` object and s3_client_kwargs for the `session.client("s3")` call. It lazily creates the boto3 session and S3 client upon first usage in a thread-safe way to support reusing one S3 client per thread for maximum performance.
 
 Example:
 ```python
@@ -261,7 +261,7 @@ with file_dataset.reader(row={"file.txt": "s3://bucket/file.txt"}).into_temp_dir
     pass
 
 # Advanced usage - explicit options for custom configuration
-options = file_dataset.Options.default(
+options = file_dataset.S3Options.default(
     multipart_threshold=64 * 1024 * 1024,  # 64MB
     multipart_chunksize=16 * 1024 * 1024   # 16MB
 )

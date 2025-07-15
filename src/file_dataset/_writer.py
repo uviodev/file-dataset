@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from .exceptions import FileDatasetError
-from .options import Options
+from .s3_options import S3Options
 from .s3_utils import is_s3_url, parse_s3_url
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ def _upload_files_to_s3(
     row: dict[str, str | Path | None],
     bucket: str,
     s3_key_prefix: str,
-    options: Options,
+    options: S3Options,
 ) -> dict[str, str | None]:
     """Upload files to S3.
 
@@ -82,7 +82,7 @@ def _upload_files_to_s3(
         row: Dictionary mapping filenames to their source paths or None
         bucket: S3 bucket name
         s3_key_prefix: S3 key prefix for uploads
-        options: Options instance with S3 client
+        options: S3Options instance with S3 client
 
     Returns:
         Dictionary mapping filenames to S3 URLs
@@ -118,7 +118,7 @@ def _write_row_files(
     row: dict[str, str | Path | None],
     into_path: str | Path,
     id: str,  # noqa: A002
-    options: Options | None = None,
+    options: S3Options | None = None,
 ) -> dict[str, Path | None | str]:
     """Write a single row of files to destination directory or S3.
 
@@ -126,7 +126,7 @@ def _write_row_files(
         row: Dictionary mapping filenames to their source paths or None
         into_path: Base destination directory or S3 path
         id: Unique identifier for this set of files
-        options: Options instance for S3 operations
+        options: S3Options instance for S3 operations
 
     Returns:
         Dictionary mapping filenames to their final destination paths or S3 URLs
@@ -178,14 +178,14 @@ def _write_row_files(
 def _write_dataframe_files(
     dataframe: pd.DataFrame,
     into_path: str | Path,
-    options: Options | None = None,
+    options: S3Options | None = None,
 ) -> pd.DataFrame:
     """Write files from DataFrame to destination directories.
 
     Args:
         dataframe: DataFrame where each row contains files to write
         into_path: Base destination directory or S3 path
-        options: Options instance for S3 operations
+        options: S3Options instance for S3 operations
 
     Returns:
         DataFrame with id column and file columns for successful writes
@@ -255,7 +255,7 @@ def write_files(
     *,
     into_path: str | Path,
     id: str | None = None,  # noqa: A002
-    options: Options | None = None,
+    options: S3Options | None = None,
 ) -> dict[str, Path | None] | pd.DataFrame:
     """Write files to destination directory with ID-based organization.
 
@@ -265,7 +265,7 @@ def write_files(
         into_path: Base destination directory or S3 path (keyword-only)
         id: Unique identifier for this set of files (required for dict,
             forbidden for DataFrame)
-        options: Options instance for S3 operations (keyword-only, required for S3)
+        options: S3Options instance for S3 operations (keyword-only, required for S3)
 
     Returns:
         Dictionary mapping filenames to destination paths (when dict is provided)
@@ -280,7 +280,7 @@ def write_files(
     # Initialize default options if S3 path is used
     if is_s3_url(str(into_path)):
         if options is None:
-            options = Options.default()
+            options = S3Options.default()
         # Validate S3 URL format
         parsed = parse_s3_url(str(into_path))
         if not parsed or not parsed[0]:  # Check for empty bucket name

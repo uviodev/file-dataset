@@ -11,13 +11,13 @@ except (ImportError, PackageNotFoundError):
 from ._reader import file_dataframe_reader, row_reader
 from ._writer import write_files
 from .exceptions import FileDatasetError
-from .options import Options
 from .pipeline import Pipeline
+from .s3_options import S3Options
 
 __all__ = [
     "FileDatasetError",
-    "Options",
     "Pipeline",
+    "S3Options",
     "__version__",
     "file_dataframe_reader",
     "row_reader",

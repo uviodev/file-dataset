@@ -10,7 +10,7 @@ from ._reader import file_dataframe_reader
 from ._writer import write_files
 from .exceptions import FileDatasetError
 from .file_dataframe import get_file_columns, validate_file_dataframe
-from .options import Options
+from .s3_options import S3Options
 
 logger = logging.getLogger(__name__)
 
@@ -49,14 +49,14 @@ class Pipeline:
         fn: Callable[[Path], dict[str, Path | None]],
         *,
         into_path: str | Path,
-        options: Options | None = None,
+        options: S3Options | None = None,
     ) -> None:
         """Initialize Pipeline with processing function and write options.
 
         Args:
             fn: User function that takes a temp directory and returns file mapping
             into_path: Base destination directory or S3 path for outputs (keyword-only)
-            options: Options instance for S3 operations (keyword-only)
+            options: S3Options instance for S3 operations (keyword-only)
         """
         self.fn = fn
         self.into_path = into_path

@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     import ray.data
 
 from file_dataset.file_dataframe import validate_id_column, validate_unique_ids
-from file_dataset.options import Options
+from file_dataset.s3_options import S3Options
 
 from ._datasource import FileDataFrameAsBlobDatasource
 
@@ -15,7 +15,7 @@ from ._datasource import FileDataFrameAsBlobDatasource
 def read_file_dataset(
     file_dataframe: "pd.DataFrame",
     batch_size: int,
-    options: Options | None = None,
+    options: S3Options | None = None,
 ) -> "ray.data.Dataset":
     """Create Ray dataset from file DataFrame using blob table format.
 
@@ -24,7 +24,7 @@ def read_file_dataset(
             Each row represents a set of files to load as binary data.
         batch_size: Number of rows to process per batch. Must be specified
             as blob tables can cause out-of-memory errors if too large.
-        options: Optional Options for S3 configuration
+        options: Optional S3Options for S3 configuration
 
     Returns:
         Ray Dataset with schema matching into_blob_table():

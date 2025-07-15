@@ -4,7 +4,7 @@ import boto3
 import pytest
 from moto import mock_aws
 
-from file_dataset import FileDatasetError, Options, row_reader
+from file_dataset import FileDatasetError, S3Options, row_reader
 
 
 @pytest.fixture
@@ -38,7 +38,7 @@ class TestReaderS3:
         files_dict = {"downloaded.txt": f"s3://{bucket}/test_file.txt"}
 
         # Create reader with default options using new API
-        r = row_reader(files_dict, options=Options.default())
+        r = row_reader(files_dict, options=S3Options.default())
 
         with r.into_temp_dir() as temp_dir:
             # Check temp directory exists and contains the file
@@ -60,7 +60,7 @@ class TestReaderS3:
         files_dict = {"downloaded.txt": f"s3://{bucket}/test_file.txt"}
 
         # Create reader with default options
-        r = row_reader(files_dict, options=Options.default())
+        r = row_reader(files_dict, options=S3Options.default())
 
         with r.into_temp_dir() as temp_dir:
             # Check temp directory exists and contains the file
@@ -91,7 +91,7 @@ class TestReaderS3:
         }
 
         # Create reader with options for S3
-        r = row_reader(files_dict, options=Options.default())
+        r = row_reader(files_dict, options=S3Options.default())
 
         with r.into_temp_dir() as temp_dir:
             # Check both files exist
@@ -112,7 +112,7 @@ class TestReaderS3:
         # Reference a non-existent S3 object
         files_dict = {"missing.txt": f"s3://{bucket}/does_not_exist.txt"}
 
-        r = row_reader(files_dict, options=Options.default())
+        r = row_reader(files_dict, options=S3Options.default())
 
         with pytest.raises(FileDatasetError) as exc_info:
             with r.into_temp_dir():
@@ -148,7 +148,7 @@ class TestReaderS3:
             "bad2.txt": "s3://bucket",  # Missing key
         }
 
-        r = row_reader(files_dict, options=Options.default())
+        r = row_reader(files_dict, options=S3Options.default())
 
         with pytest.raises(FileDatasetError) as exc_info:
             with r.into_temp_dir():
@@ -184,14 +184,14 @@ class TestReaderS3:
         files_dict = {"file.txt": f"s3://{bucket}/test_file.txt"}
 
         # Test with explicit options
-        explicit_opts = Options.default()
+        explicit_opts = S3Options.default()
         r1 = row_reader(files_dict, options=explicit_opts)
 
         with r1.into_temp_dir() as temp_dir:
             assert (temp_dir / "file.txt").read_bytes() == test_data
 
         # Test with default options created inline
-        r2 = row_reader(files_dict, options=Options.default())
+        r2 = row_reader(files_dict, options=S3Options.default())
 
         with r2.into_temp_dir() as temp_dir:
             assert (temp_dir / "file.txt").read_bytes() == test_data

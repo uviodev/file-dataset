@@ -7,7 +7,7 @@ from moto import mock_aws
 
 from file_dataset import write_files
 from file_dataset.exceptions import FileDatasetError
-from file_dataset.options import Options
+from file_dataset.s3_options import S3Options
 
 
 @mock_aws
@@ -22,7 +22,7 @@ class TestWriteS3:
         self.s3_client.create_bucket(Bucket=self.bucket_name)
 
         # Create options
-        self.options = Options.default()
+        self.options = S3Options.default()
 
     def test_single_file_s3_upload(self, tmp_path):
         """Test uploading a single file to S3."""

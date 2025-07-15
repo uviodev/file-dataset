@@ -5,7 +5,7 @@ import pyarrow as pa
 from moto import mock_aws
 
 import file_dataset
-from file_dataset.options import Options
+from file_dataset.s3_options import S3Options
 
 
 def test_dataframe_reader_into_size_table_local_files(tmp_path):
@@ -70,7 +70,7 @@ def test_dataframe_reader_into_size_table_s3_files():
     )
 
     # Create reader with options and get size table
-    options = Options.default()
+    options = S3Options.default()
     reader = file_dataset.file_dataframe_reader(df, options=options)
     table = reader.into_size_table()
 

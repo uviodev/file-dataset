@@ -1,4 +1,4 @@
-"""Options class for managing S3 configuration and credentials."""
+"""S3Options class for managing S3 configuration and credentials."""
 
 import threading
 from typing import Any
@@ -8,7 +8,7 @@ from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
 
 
-class Options:
+class S3Options:
     """Options for file dataset operations including S3 configuration.
 
     This class manages S3 credentials and client configuration with thread-safe
@@ -28,7 +28,7 @@ class Options:
         s3_client_kwargs: dict[str, Any],
         s3_transfer_config: TransferConfig | None = None,
     ) -> None:
-        """Initialize Options with configuration parameters.
+        """Initialize S3Options with configuration parameters.
 
         Args:
             session_kwargs: Keyword arguments for boto3.Session
@@ -46,8 +46,8 @@ class Options:
         cls,
         multipart_threshold: int | None = None,
         multipart_chunksize: int | None = None,
-    ) -> "Options":
-        """Create Options with default settings using boto3 default session.
+    ) -> "S3Options":
+        """Create S3Options with default settings using boto3 default session.
 
         Uses frozen credentials from the default boto3 session and configures
         adaptive retry mode with 3 retries.
@@ -57,7 +57,7 @@ class Options:
             multipart_chunksize: Size of chunks for multipart uploads in bytes
 
         Returns:
-            Options instance with default configuration
+            S3Options instance with default configuration
         """
         # Get frozen credentials from default session
         session = boto3.Session()

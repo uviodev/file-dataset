@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from moto import mock_aws
 
-from file_dataset import FileDatasetError, Options, file_dataframe_reader
+from file_dataset import FileDatasetError, S3Options, file_dataframe_reader
 
 
 class TestDataFrameReader:
@@ -253,7 +253,7 @@ class TestDataFrameReader:
         )
 
         # Create reader with DataFrame and options
-        options = Options.default()
+        options = S3Options.default()
         df_reader = file_dataframe_reader(df, options=options)
 
         # Process rows - should skip failing rows (row2 and row3)

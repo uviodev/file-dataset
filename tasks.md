@@ -139,7 +139,7 @@ Remove the separate kwargs and make the API more intuitive by using type-based d
 
 
 ## Task 8: Rename Options to S3Options for Clarity
-**Status:** Not Started
+**Status:** Done
 **Priority:** Medium
 **Dependencies:** Task 7 (Simplify write_files API)
 
