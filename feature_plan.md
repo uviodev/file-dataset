@@ -1,41 +1,53 @@
-# Task 3: Improve Options Default Behavior
+# Task 4: Split Core Module
 
 **Status:** Not Started
-**Priority:** Medium
-**Dependencies:** Task 2 (Reader class rename)
+**Priority:** High
+**Dependencies:** Task 3 (Options default behavior)
 
-**Summary:** Change None options behavior to use default Options instead of raising errors.
+**Summary:** Split core.py into separate reader and writer modules for better separation of concerns.
 
 **Description:**
-Modify the behavior when an `options` value of None is passed. Instead of raising an error, the options should be automatically initialized to `Options.default()`. This provides better user experience by offering sensible defaults.
+Split `core.py` into two files: `_reader.py` (containing `reader()` function and related classes) and `_writer.py` (containing the writing functions). The Pipeline class is already in its own file (pipeline.py). Update `__init__.py` to maintain the same public API so users see no change. Update all related tests to reflect the new structure.
 
 **High-Level Test Descriptions:**
-- Test that passing `options=None` initializes `Options.default()` without errors
-- Test that the default options provide expected S3 client configuration
-- Test that explicit options still override defaults properly
-- Test edge cases where Options.default() might fail and ensure graceful handling
+- Test that public API remains unchanged after the split
+- Test import statements in `__init__.py` correctly expose reader and writer functionality
+- Test that `_reader.py` contains all reader-related classes and functions
+- Test that `_writer.py` contains all writer-related functionality
+- Integration tests to ensure reader and writer work together properly
+- Test that internal imports between `_reader.py` and `_writer.py` work correctly
 
 ## Implementation Plan
 
-Based on analyzing the codebase, I need to:
+Based on analyzing the current core.py file, I need to:
 
-1. **Identify where None options cause errors** - Search for places that check `if options is None` and raise errors
-2. **Understand Options.default()** - Check how the default Options are created
-3. **Update error-raising code** - Replace error raising with `Options.default()` initialization
-4. **Update tests** - Modify tests that expect errors to now expect successful execution with defaults
-5. **Add new tests** - Test the new default behavior
+**Code to move to `_reader.py`:**
+- `FileRowReader` class (lines 20-181)
+- `reader()` function (lines 183-214)
+- `FileDataFrameReader` class (lines 506-893)
 
-**Areas to investigate:**
-- `core.py` - FileRowReader and FileDataFrameReader classes
-- `write_files()` function for S3 operations
-- Any S3-related operations that require options
+**Code to move to `_writer.py`:**
+- `_validate_source_files()` function (lines 217-238)
+- `_copy_files_to_destination()` function (lines 241-270)
+- `_upload_files_to_s3()` function (lines 273-314)
+- `_write_row_files()` function (lines 317-372)
+- `_write_dataframe_files()` function (lines 375-447)
+- `write_files()` function (lines 450-503)
 
-**Code Changes:**
-1. Replace `if options is None: raise ValueError(...)` with `if options is None: options = Options.default()`
-2. Update related tests to expect default behavior instead of errors
-3. Add tests to verify default options work correctly for S3 operations
+**Shared imports/dependencies:**
+Both modules will need:
+- Standard library imports (logging, shutil, tempfile, etc.)
+- pandas, pyarrow
+- Local imports (exceptions, options, s3_utils)
+
+**Steps:**
+1. Create `_reader.py` with reader functionality
+2. Create `_writer.py` with writer functionality
+3. Update `__init__.py` to import from both modules
+4. Remove `core.py`
+5. Update tests to ensure no breaking changes
 
 **Testing:**
-- Test S3 operations work with None options using default credentials
-- Test that explicit options still override defaults
-- Test error handling when default options fail to initialize
+- Run all existing tests to ensure no regressions
+- Test that imports work correctly from both internal modules
+- Verify public API remains exactly the same

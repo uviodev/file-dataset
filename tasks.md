@@ -51,7 +51,7 @@ Modify the behavior when an `options` value of None is passed. Instead of raisin
 - Test edge cases where Options.default() might fail and ensure graceful handling
 
 ## Task 4: Split Core Module
-**Status:** Not Started
+**Status:** Done
 **Priority:** High
 **Dependencies:** Task 3 (Options default behavior)
 

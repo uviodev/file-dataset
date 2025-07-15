@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from .core import reader, write_files
+from ._reader import reader
+from ._writer import write_files
 from .exceptions import FileDatasetError
 from .options import Options
 

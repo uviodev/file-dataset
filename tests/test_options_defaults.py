@@ -117,7 +117,7 @@ def test_options_initialized_eagerly_and_shared():
     mock_options = MagicMock()
 
     with patch(
-        "file_dataset.core.Options.default", return_value=mock_options
+        "file_dataset._reader.Options.default", return_value=mock_options
     ) as mock_default:
         # Create DataFrame with multiple S3 files
         df = pd.DataFrame(
@@ -160,7 +160,7 @@ def test_filerowreader_options_initialized_eagerly():
     mock_options = MagicMock()
 
     with patch(
-        "file_dataset.core.Options.default", return_value=mock_options
+        "file_dataset._reader.Options.default", return_value=mock_options
     ) as mock_default:
         # Create reader with S3 files
         reader = file_dataset.reader(row={"file1.txt": "s3://bucket/file1.txt"})

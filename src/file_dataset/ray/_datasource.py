@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 import ray.data
 from ray.data.block import BlockMetadata
 
-from file_dataset.core import reader
+from file_dataset._reader import reader
 from file_dataset.options import Options
 
 logger = logging.getLogger(__name__)
