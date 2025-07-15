@@ -9,47 +9,10 @@ import pandas as pd
 from ._reader import reader
 from ._writer import write_files
 from .exceptions import FileDatasetError
+from .file_dataframe import get_file_columns, validate_file_dataframe
 from .options import Options
 
 logger = logging.getLogger(__name__)
-
-
-def _validate_and_get_file_dataframe_columns(dataframe: pd.DataFrame) -> list[str]:
-    """Validate DataFrame is a valid file DataFrame and return file columns.
-
-    Args:
-        dataframe: DataFrame to validate
-
-    Returns:
-        List of file column names (columns with file extensions)
-
-    Raises:
-        ValueError: If DataFrame missing 'id' column or no valid file columns found
-    """
-    # Check for 'id' column
-    if "id" not in dataframe.columns:
-        msg = "DataFrame must have an 'id' column"
-        raise ValueError(msg)
-
-    # Find file columns (columns other than 'id' that have file extensions)
-    potential_file_columns = [col for col in dataframe.columns if col != "id"]
-
-    # Filter to only columns that look like file names (have file extensions)
-    file_columns = []
-    for col in potential_file_columns:
-        # Check if column name has a file extension (contains a dot followed by letters)
-        if "." in col and col.split(".")[-1].isalpha():
-            file_columns.append(col)
-
-    if not file_columns:
-        msg = (
-            "No valid file columns found in DataFrame. "
-            "File columns must have file extensions "
-            "(e.g., 'file.txt', 'image.jpg', 'data.csv')"
-        )
-        raise ValueError(msg)
-
-    return file_columns
 
 
 class Pipeline:
@@ -113,7 +76,8 @@ class Pipeline:
             FileDatasetError: If all rows fail to process
         """
         # Validate input DataFrame and get file columns
-        file_columns = _validate_and_get_file_dataframe_columns(dataframe)
+        validate_file_dataframe(dataframe)
+        file_columns = get_file_columns(dataframe)
 
         # Create filtered DataFrame with only valid file columns and id
         filtered_columns = ["id", *file_columns]

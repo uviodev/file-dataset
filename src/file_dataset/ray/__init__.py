@@ -6,6 +6,7 @@ if TYPE_CHECKING:
     import pandas as pd
     import ray.data
 
+from file_dataset.file_dataframe import validate_id_column, validate_unique_ids
 from file_dataset.options import Options
 
 from ._datasource import FileDataFrameAsBlobDatasource
@@ -41,13 +42,8 @@ def read_file_dataset(
     import ray.data
 
     # Validate DataFrame has unique 'id' column
-    if "id" not in file_dataframe.columns:
-        msg = "DataFrame must have an 'id' column"
-        raise ValueError(msg)
-
-    if file_dataframe["id"].duplicated().any():
-        msg = "DataFrame 'id' column must have unique values"
-        raise ValueError(msg)
+    validate_id_column(file_dataframe)
+    validate_unique_ids(file_dataframe)
 
     # Create and configure datasource
     datasource = FileDataFrameAsBlobDatasource(

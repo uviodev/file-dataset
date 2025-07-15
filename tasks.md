@@ -69,11 +69,11 @@ Split `core.py` into two files: `_reader.py` (containing `reader()` function and
 - Test that internal imports between `_reader.py` and `_writer.py` work correctly
 
 ## Task 5: Consolidate File DataFrame Concept
-**Status:** Not Started
+**Status:** Done
 **Priority:** Medium
 **Dependencies:** Task 4 (Core module split)
 
-**Summary:** Create dedicated file_dataframe.py module to consolidate DataFrame validation logic.
+**Summary:** Create dedicated file_dataframe.py module to consolidate DataFrame validation logic there.
 
 **Description:**
 Consolidate the concept of a `file_dataframe` into a new file, `file_dataframe.py`. Move the logic for getting the file_dataframe's columns there. Replace scattered validation logic in `pipeline.py` with centralized validation functions. Ray code should remain in separate ray modules though it can now import the validation logic from file_dataframe.py.

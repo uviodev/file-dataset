@@ -11,6 +11,7 @@ import ray.data
 from ray.data.block import BlockMetadata
 
 from file_dataset._reader import reader
+from file_dataset.file_dataframe import get_file_columns
 from file_dataset.options import Options
 
 logger = logging.getLogger(__name__)
@@ -45,13 +46,10 @@ class FileDataFrameAsBlobDatasource(ray.data.Datasource):
         Raises:
             ValueError: If file_dataframe is invalid (e.g., missing file columns)
         """
-        # Import here to avoid circular imports
-        from file_dataset.pipeline import _validate_and_get_file_dataframe_columns
-
         # Validate the DataFrame is a proper file DataFrame
         # This will raise ValueError if invalid
         if len(file_dataframe) > 0:  # Only validate if there are rows
-            _validate_and_get_file_dataframe_columns(file_dataframe)
+            get_file_columns(file_dataframe)
 
         self.dataframe = file_dataframe
         self.batch_size = batch_size
