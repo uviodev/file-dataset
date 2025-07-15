@@ -6,8 +6,10 @@ including support for multipart uploads, automatic retries, and
 configurable transfer settings via S3Options.transfer_config.
 """
 
+import concurrent.futures
 import shutil
 from collections.abc import Mapping
+from io import BytesIO
 from pathlib import Path
 
 from botocore.exceptions import ClientError
@@ -65,6 +67,45 @@ def _validate_unique_destinations(
     return file_errors
 
 
+def _execute_copies_parallel(
+    copies: list[tuple[str | Path, str | Path]],
+    s3_options: S3Options,
+) -> dict[str, str]:
+    """Execute copy operations in parallel."""
+    executor = s3_options.executor
+    if not executor:
+        return {}
+
+    futures = {
+        executor.submit(_copy_single_file, src, dst, s3_options): str(i)
+        for i, (src, dst) in enumerate(copies)
+    }
+
+    errors = {}
+    for future in concurrent.futures.as_completed(futures):
+        idx = futures[future]
+        try:
+            future.result()
+        except (OSError, ValueError, ClientError) as e:
+            errors[idx] = str(e)
+
+    return errors
+
+
+def _execute_copies_sequential(
+    copies: list[tuple[str | Path, str | Path]],
+    s3_options: S3Options | None,
+) -> dict[str, str]:
+    """Execute copy operations sequentially."""
+    errors = {}
+    for i, (src, dst) in enumerate(copies):
+        try:
+            _copy_single_file(src, dst, s3_options)
+        except (OSError, ValueError, ClientError) as e:
+            errors[str(i)] = str(e)
+    return errors
+
+
 def copy_each_file(
     copies: list[tuple[str | Path, str | Path]], s3_options: S3Options | None
 ) -> None:
@@ -96,12 +137,10 @@ def copy_each_file(
         )
 
     # Perform copies, collecting any errors
-    copy_errors: dict[str, str] = {}
-    for i, (src, dst) in enumerate(copies):
-        try:
-            _copy_single_file(src, dst, s3_options)
-        except (OSError, ValueError, ClientError) as e:
-            copy_errors[str(i)] = str(e)
+    if s3_options and s3_options.local_parallelism and s3_options.executor:
+        copy_errors = _execute_copies_parallel(copies, s3_options)
+    else:
+        copy_errors = _execute_copies_sequential(copies, s3_options)
 
     # If any copies failed, raise error
     if copy_errors:
@@ -147,6 +186,47 @@ def _copy_single_file(
         # Use copy for S3 to S3
         copy_source = {"Bucket": src_bucket, "Key": src_key}
         s3_client.copy(copy_source, dst_bucket, dst_key)
+
+
+def _read_sizes_parallel(
+    files: Mapping[str, str | Path],
+    s3_options: S3Options,
+) -> tuple[dict[str, int], dict[str, str]]:
+    """Read file sizes in parallel."""
+    executor = s3_options.executor
+    if not executor:
+        return {}, {}
+
+    futures = {
+        executor.submit(_read_file_size, path, s3_options): key
+        for key, path in files.items()
+    }
+
+    result = {}
+    errors = {}
+    for future in concurrent.futures.as_completed(futures):
+        key = futures[future]
+        try:
+            result[key] = future.result()
+        except (OSError, ClientError) as e:
+            errors[key] = str(e)
+
+    return result, errors
+
+
+def _read_sizes_sequential(
+    files: Mapping[str, str | Path],
+    s3_options: S3Options | None,
+) -> tuple[dict[str, int], dict[str, str]]:
+    """Read file sizes sequentially."""
+    result = {}
+    errors = {}
+    for key, path in files.items():
+        try:
+            result[key] = _read_file_size(path, s3_options)
+        except (OSError, ClientError) as e:
+            errors[key] = str(e)
+    return result, errors
 
 
 def _read_file_size(path: str | Path, s3_options: S3Options | None) -> int:
@@ -197,15 +277,49 @@ def read_each_file_size(
     if needs_s3 and s3_options is None:
         s3_options = S3Options.default()
 
+    if s3_options and s3_options.local_parallelism and s3_options.executor:
+        return _read_sizes_parallel(files, s3_options)
+    return _read_sizes_sequential(files, s3_options)
+
+
+def _read_contents_parallel(
+    files: Mapping[str, str | Path],
+    s3_options: S3Options,
+) -> tuple[dict[str, bytes], dict[str, str]]:
+    """Read file contents in parallel."""
+    executor = s3_options.executor
+    if not executor:
+        return {}, {}
+
+    futures = {
+        executor.submit(_read_file_contents, path, s3_options): key
+        for key, path in files.items()
+    }
+
     result = {}
     errors = {}
-
-    for key, path in files.items():
+    for future in concurrent.futures.as_completed(futures):
+        key = futures[future]
         try:
-            result[key] = _read_file_size(path, s3_options)
+            result[key] = future.result()
         except (OSError, ClientError) as e:
             errors[key] = str(e)
 
+    return result, errors
+
+
+def _read_contents_sequential(
+    files: Mapping[str, str | Path],
+    s3_options: S3Options | None,
+) -> tuple[dict[str, bytes], dict[str, str]]:
+    """Read file contents sequentially."""
+    result = {}
+    errors = {}
+    for key, path in files.items():
+        try:
+            result[key] = _read_file_contents(path, s3_options)
+        except (OSError, ClientError) as e:
+            errors[key] = str(e)
     return result, errors
 
 
@@ -227,8 +341,6 @@ def _read_file_contents(path: str | Path, s3_options: S3Options | None) -> bytes
 
     if is_s3_url(path_str):
         # S3 file - use download_fileobj for S3Transfer support
-        from io import BytesIO
-
         bucket, key = parse_s3_url(path_str)
         s3_client = s3_options.s3_client
         fileobj = BytesIO()
@@ -262,16 +374,9 @@ def read_each_file_contents(
     if needs_s3 and s3_options is None:
         s3_options = S3Options.default()
 
-    result = {}
-    errors = {}
-
-    for key, path in files.items():
-        try:
-            result[key] = _read_file_contents(path, s3_options)
-        except (OSError, ClientError) as e:
-            errors[key] = str(e)
-
-    return result, errors
+    if s3_options and s3_options.local_parallelism and s3_options.executor:
+        return _read_contents_parallel(files, s3_options)
+    return _read_contents_sequential(files, s3_options)
 
 
 def _validate_file_exists(path: str | Path, s3_options: S3Options | None) -> str | None:  # noqa: PLR0911
@@ -315,6 +420,47 @@ def _validate_file_exists(path: str | Path, s3_options: S3Options | None) -> str
         if not path_obj.is_file():
             return f"Source path is not a file: {path_str}"
         return None  # File exists and is a file
+
+
+def _validate_existence_parallel(
+    files: Mapping[str, str | Path],
+    s3_options: S3Options,
+) -> dict[str, str]:
+    """Validate file existence in parallel."""
+    executor = s3_options.executor
+    if not executor:
+        return {}
+
+    futures = {
+        executor.submit(_validate_file_exists, str(path), s3_options): key
+        for key, path in files.items()
+    }
+
+    errors = {}
+    for future in concurrent.futures.as_completed(futures):
+        key = futures[future]
+        try:
+            exist_error = future.result()
+            if exist_error:
+                errors[key] = exist_error
+        except Exception as e:  # noqa: BLE001
+            errors[key] = str(e)
+
+    return errors
+
+
+def _validate_existence_sequential(
+    files: Mapping[str, str | Path],
+    s3_options: S3Options | None,
+) -> dict[str, str]:
+    """Validate file existence sequentially."""
+    errors = {}
+    for key, path in files.items():
+        path_str = str(path)
+        exist_error = _validate_file_exists(path_str, s3_options)
+        if exist_error:
+            errors[key] = exist_error
+    return errors
 
 
 def _validate_s3_path_format(
@@ -388,10 +534,10 @@ def validate_each_file(
 
     # Second pass: existence checks (only if requested and no format errors)
     if do_existence_checks and not errors:
-        for key, path in files.items():
-            path_str = str(path)
-            exist_error = _validate_file_exists(path_str, s3_options)
-            if exist_error:
-                errors[key] = exist_error
+        if s3_options and s3_options.local_parallelism and s3_options.executor:
+            exist_errors = _validate_existence_parallel(files, s3_options)
+        else:
+            exist_errors = _validate_existence_sequential(files, s3_options)
+        errors.update(exist_errors)
 
     return errors

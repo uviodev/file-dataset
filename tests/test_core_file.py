@@ -448,3 +448,352 @@ class TestFileValidation:
         assert len(errors) == 1
         assert "__s3_options__" in errors
         assert "S3Options required" in errors["__s3_options__"]
+
+
+class TestParallelOperations:
+    """Test parallel execution features in core file operations."""
+
+    def test_parallel_copy_each_file_basic(self, tmp_path):
+        """Test that parallel copy works correctly."""
+        # Create multiple source files
+        num_files = 5
+        copies = []
+        for i in range(num_files):
+            source = tmp_path / f"source{i}.txt"
+            source.write_text(f"content {i}")
+            dest = tmp_path / f"dest{i}.txt"
+            copies.append((str(source), str(dest)))
+
+        # Test parallel execution
+        s3_options = S3Options.default(local_parallelism=3)
+        copy_each_file(copies, s3_options=s3_options)
+
+        # Verify all files were copied correctly
+        for i in range(num_files):
+            dest_path = tmp_path / f"dest{i}.txt"
+            assert dest_path.exists()
+            assert dest_path.read_text() == f"content {i}"
+
+    def test_parallel_copy_with_errors(self, tmp_path):
+        """Test parallel copy handles errors correctly."""
+        # Mix of valid and invalid copies
+        source1 = tmp_path / "source1.txt"
+        source1.write_text("content1")
+
+        copies = [
+            (str(source1), str(tmp_path / "dest1.txt")),  # Valid
+            (
+                str(tmp_path / "missing.txt"),
+                str(tmp_path / "dest2.txt"),
+            ),  # Missing source
+            (str(source1), str(tmp_path / "dest3.txt")),  # Valid
+        ]
+
+        s3_options = S3Options.default(local_parallelism=2)
+
+        with pytest.raises(FileDatasetError) as exc_info:
+            copy_each_file(copies, s3_options=s3_options)
+
+        # Should have validation error for missing source
+        assert "Source file not found" in str(exc_info.value)
+
+    @mock_aws
+    def test_parallel_copy_s3_operations(self, tmp_path):
+        """Test parallel copy with S3 operations."""
+        # Set up mock S3
+        s3 = boto3.client("s3", region_name="us-east-1")
+        bucket = "test-bucket"
+        s3.create_bucket(Bucket=bucket)
+
+        # Create local files and upload some to S3
+        local_file = tmp_path / "local.txt"
+        local_file.write_text("local content")
+
+        s3.put_object(Bucket=bucket, Key="s3file.txt", Body=b"s3 content")
+
+        # Mix of copy operations
+        copies = [
+            (str(local_file), str(tmp_path / "copy1.txt")),  # Local to local
+            (f"s3://{bucket}/s3file.txt", str(tmp_path / "copy2.txt")),  # S3 to local
+            (str(local_file), f"s3://{bucket}/uploaded.txt"),  # Local to S3
+        ]
+
+        s3_options = S3Options.default(local_parallelism=3)
+        copy_each_file(copies, s3_options=s3_options)
+
+        # Verify results
+        assert (tmp_path / "copy1.txt").read_text() == "local content"
+        assert (tmp_path / "copy2.txt").read_text() == "s3 content"
+
+        # Check S3 upload
+        obj = s3.get_object(Bucket=bucket, Key="uploaded.txt")
+        assert obj["Body"].read() == b"local content"
+
+    def test_parallel_read_each_file_size(self, tmp_path):
+        """Test parallel reading of file sizes."""
+        from file_dataset._core_file import read_each_file_size
+
+        # Create test files with different sizes
+        files = {}
+        for i in range(5):
+            file_path = tmp_path / f"file{i}.txt"
+            content = "x" * (100 * (i + 1))  # Different sizes
+            file_path.write_text(content)
+            files[f"f{i}"] = str(file_path)
+
+        # Test parallel execution
+        s3_options = S3Options.default(local_parallelism=3)
+        sizes, errors = read_each_file_size(files, s3_options=s3_options)
+
+        # Verify results
+        assert len(sizes) == 5
+        assert len(errors) == 0
+        for i in range(5):
+            expected_size = 100 * (i + 1)
+            assert sizes[f"f{i}"] == expected_size
+
+    @mock_aws
+    def test_parallel_read_each_file_size_mixed(self, tmp_path):
+        """Test parallel reading of file sizes from mixed sources."""
+        from file_dataset._core_file import read_each_file_size
+
+        # Set up S3
+        s3 = boto3.client("s3", region_name="us-east-1")
+        bucket = "test-bucket"
+        s3.create_bucket(Bucket=bucket)
+
+        # Create mixed files
+        files = {}
+
+        # Local files
+        for i in range(3):
+            file_path = tmp_path / f"local{i}.txt"
+            content = "x" * (50 * (i + 1))
+            file_path.write_text(content)
+            files[f"local{i}"] = str(file_path)
+
+        # S3 files
+        for i in range(2):
+            content = b"y" * (75 * (i + 1))
+            s3.put_object(Bucket=bucket, Key=f"s3file{i}.txt", Body=content)
+            files[f"s3_{i}"] = f"s3://{bucket}/s3file{i}.txt"
+
+        # Test parallel execution
+        s3_options = S3Options.default(local_parallelism=4)
+        sizes, errors = read_each_file_size(files, s3_options=s3_options)
+
+        # Verify results
+        assert len(sizes) == 5
+        assert len(errors) == 0
+
+        # Check local file sizes
+        for i in range(3):
+            assert sizes[f"local{i}"] == 50 * (i + 1)
+
+        # Check S3 file sizes
+        for i in range(2):
+            assert sizes[f"s3_{i}"] == 75 * (i + 1)
+
+    def test_parallel_read_each_file_contents(self, tmp_path):
+        """Test parallel reading of file contents."""
+        from file_dataset._core_file import read_each_file_contents
+
+        # Create test files
+        files = {}
+        expected_contents = {}
+        for i in range(5):
+            file_path = tmp_path / f"file{i}.txt"
+            content = f"Content for file {i}"
+            file_path.write_text(content)
+            files[f"f{i}"] = str(file_path)
+            expected_contents[f"f{i}"] = content.encode()
+
+        # Test parallel execution
+        s3_options = S3Options.default(local_parallelism=3)
+        contents, errors = read_each_file_contents(files, s3_options=s3_options)
+
+        # Verify results
+        assert len(contents) == 5
+        assert len(errors) == 0
+        for key, expected in expected_contents.items():
+            assert contents[key] == expected
+
+    def test_parallel_read_contents_with_errors(self, tmp_path):
+        """Test parallel read contents handles errors correctly."""
+        from file_dataset._core_file import read_each_file_contents
+
+        # Mix of valid and missing files
+        file1 = tmp_path / "exists.txt"
+        file1.write_text("existing content")
+
+        files = {
+            "f1": str(file1),
+            "f2": str(tmp_path / "missing.txt"),
+            "f3": str(file1),  # Another valid file
+        }
+
+        s3_options = S3Options.default(local_parallelism=2)
+        contents, errors = read_each_file_contents(files, s3_options=s3_options)
+
+        # Should have 2 successes and 1 error
+        assert len(contents) == 2
+        assert len(errors) == 1
+        assert contents["f1"] == b"existing content"
+        assert contents["f3"] == b"existing content"
+        assert "f2" in errors
+
+    def test_parallel_validate_each_file(self, tmp_path):
+        """Test parallel file validation."""
+        from file_dataset._core_file import validate_each_file
+
+        # Create mix of valid and invalid files
+        file1 = tmp_path / "exists1.txt"
+        file1.write_text("content1")
+        file2 = tmp_path / "exists2.txt"
+        file2.write_text("content2")
+
+        files = {
+            "f1": str(file1),
+            "f2": str(file2),
+            "f3": str(tmp_path / "missing1.txt"),
+            "f4": str(tmp_path / "missing2.txt"),
+            "f5": str(file1),  # Valid again
+        }
+
+        # Test parallel validation
+        s3_options = S3Options.default(local_parallelism=3)
+        errors = validate_each_file(
+            files, s3_options=s3_options, do_existence_checks=True
+        )
+
+        # Should have errors for missing files only
+        assert len(errors) == 2
+        assert "f3" in errors
+        assert "f4" in errors
+        assert "not found" in errors["f3"]
+        assert "not found" in errors["f4"]
+
+    def test_parallel_validate_no_existence_checks(self, tmp_path):
+        """Test parallel validation without existence checks."""
+        from file_dataset._core_file import validate_each_file
+
+        files = {
+            "f1": str(tmp_path / "any.txt"),
+            "f2": "s3://bucket/file.txt",
+            "f3": "s3://invalid-url",  # Invalid format
+        }
+
+        # Test with parallelism but no existence checks
+        s3_options = S3Options.default(local_parallelism=2)
+        errors = validate_each_file(
+            files, s3_options=s3_options, do_existence_checks=False
+        )
+
+        # Should only have format error
+        assert len(errors) == 1
+        assert "f3" in errors
+        assert "Invalid S3 URL" in errors["f3"]
+
+
+class TestParallelIntegration:
+    """Integration tests for parallel operations."""
+
+    def test_parallel_sequential_equivalence(self, tmp_path):
+        """Test that parallel and sequential operations produce same results."""
+        from file_dataset._core_file import (
+            copy_each_file,
+            read_each_file_contents,
+            read_each_file_size,
+            validate_each_file,
+        )
+
+        # Create test files
+        num_files = 8
+        source_files = {}
+        for i in range(num_files):
+            file_path = tmp_path / f"source{i}.txt"
+            file_path.write_text(f"Content {i}" * 10)
+            source_files[f"f{i}"] = str(file_path)
+
+        # Test sequential
+        seq_sizes, seq_errors = read_each_file_size(source_files, s3_options=None)
+        seq_contents, _ = read_each_file_contents(source_files, s3_options=None)
+        seq_validation = validate_each_file(source_files, s3_options=None)
+
+        # Test parallel
+        par_options = S3Options.default(local_parallelism=4)
+        par_sizes, par_errors = read_each_file_size(
+            source_files, s3_options=par_options
+        )
+        par_contents, _ = read_each_file_contents(source_files, s3_options=par_options)
+        par_validation = validate_each_file(source_files, s3_options=par_options)
+
+        # Results should be identical
+        assert seq_sizes == par_sizes
+        assert seq_errors == par_errors
+        assert seq_contents == par_contents
+        assert seq_validation == par_validation
+
+        # Test copy operations
+        seq_copies = [
+            (src, str(tmp_path / "seq" / f"dest{i}.txt"))
+            for i, src in enumerate(source_files.values())
+        ]
+        par_copies = [
+            (src, str(tmp_path / "par" / f"dest{i}.txt"))
+            for i, src in enumerate(source_files.values())
+        ]
+
+        (tmp_path / "seq").mkdir()
+        (tmp_path / "par").mkdir()
+
+        copy_each_file(seq_copies, s3_options=None)
+        copy_each_file(par_copies, s3_options=par_options)
+
+        # Verify all files copied correctly
+        for i in range(num_files):
+            seq_file = tmp_path / "seq" / f"dest{i}.txt"
+            par_file = tmp_path / "par" / f"dest{i}.txt"
+            assert seq_file.read_text() == par_file.read_text()
+
+    def test_parallel_with_various_thread_counts(self, tmp_path):
+        """Test parallel operations with different thread counts."""
+        from file_dataset._core_file import read_each_file_size
+
+        # Create files
+        files = {}
+        for i in range(10):
+            file_path = tmp_path / f"file{i}.txt"
+            file_path.write_text("x" * (i + 1) * 100)
+            files[f"f{i}"] = str(file_path)
+
+        # Test with different parallelism levels
+        for thread_count in [1, 2, 4, 8, 16]:
+            options = S3Options.default(local_parallelism=thread_count)
+            sizes, errors = read_each_file_size(files, s3_options=options)
+
+            assert len(sizes) == 10
+            assert len(errors) == 0
+
+            # Verify correct sizes
+            for i in range(10):
+                assert sizes[f"f{i}"] == (i + 1) * 100
+
+    def test_executor_resource_cleanup(self):
+        """Test that executors are properly cleaned up."""
+        # Create multiple S3Options instances with executors
+        options_list = []
+        for _ in range(5):
+            options = S3Options.default(local_parallelism=2)
+            # Access executor to create it
+            executor = options.executor
+            assert executor is not None
+            options_list.append(options)
+
+        # Delete options - should trigger cleanup
+        for options in options_list:
+            del options
+
+        # Create new options to ensure no resource exhaustion
+        new_options = S3Options.default(local_parallelism=4)
+        assert new_options.executor is not None

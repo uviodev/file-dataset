@@ -6,7 +6,11 @@ if TYPE_CHECKING:
     import pandas as pd
     import ray.data
 
-from file_dataset.file_dataframe import validate_id_column, validate_unique_ids
+from file_dataset.file_dataframe import (
+    get_file_columns,
+    validate_id_column,
+    validate_unique_ids,
+)
 from file_dataset.s3_options import S3Options
 
 from ._datasource import FileDataFrameAsBlobDatasource
@@ -45,6 +49,22 @@ def read_file_dataset(
     validate_id_column(file_dataframe)
     validate_unique_ids(file_dataframe)
 
+    # Determine local parallelism based on number of file columns
+    file_columns = get_file_columns(file_dataframe)
+    num_file_columns = len(file_columns)
+
+    # Create S3Options with local_parallelism if not provided
+    if options is None:
+        options = S3Options.default(local_parallelism=num_file_columns)
+    elif options.local_parallelism is None:
+        # If options provided but no parallelism set, create new options with it
+        options = S3Options(
+            session_kwargs=options._session_kwargs,  # noqa: SLF001
+            s3_client_kwargs=options._s3_client_kwargs,  # noqa: SLF001
+            s3_transfer_config=options._s3_transfer_config,  # noqa: SLF001
+            local_parallelism=num_file_columns,
+        )
+
     # Create and configure datasource
     datasource = FileDataFrameAsBlobDatasource(
         file_dataframe=file_dataframe,
@@ -52,7 +72,7 @@ def read_file_dataset(
         # Here we ensure we always pass valid S3Options.
         # Ray will pass frozen credentials to the read tasks which will
         # then minimize load on EC2 Metadata server and prevent some flakiness.
-        options=options or S3Options.default(),
+        options=options,
     )
 
     # Create Ray dataset

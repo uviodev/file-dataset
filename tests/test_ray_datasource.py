@@ -377,3 +377,55 @@ class TestRayDatasource:
         for i, row in results.iterrows():
             expected_length = len(f"content1_{i}".encode())
             assert row["processed"] == expected_length
+
+    def test_read_file_dataset_sets_local_parallelism(
+        self, sample_file_dataframe, mocker
+    ):
+        """Test that read_file_dataset sets local_parallelism based on file columns."""
+        from file_dataset.ray import read_file_dataset
+        from file_dataset.ray._datasource import FileDataFrameAsBlobDatasource
+
+        # Mock the datasource creation to capture options
+        mock_datasource_init = mocker.spy(FileDataFrameAsBlobDatasource, "__init__")
+
+        # Sample dataframe has 2 file columns: file1.txt and file2.txt
+        # Test with no options provided
+        _ = read_file_dataset(
+            file_dataframe=sample_file_dataframe,
+            batch_size=2,
+            options=None,
+        )
+
+        # Check the options passed to datasource
+        call_args = mock_datasource_init.call_args_list[0]
+        options_arg = call_args[1]["options"]
+        assert options_arg.local_parallelism == 2  # 2 file columns
+
+        # Test with options provided but no local_parallelism
+        custom_options = file_dataset.S3Options.default()
+        assert custom_options.local_parallelism is None
+
+        _ = read_file_dataset(
+            file_dataframe=sample_file_dataframe,
+            batch_size=2,
+            options=custom_options,
+        )
+
+        # Should have set local_parallelism
+        call_args2 = mock_datasource_init.call_args_list[1]
+        options_arg2 = call_args2[1]["options"]
+        assert options_arg2.local_parallelism == 2
+
+        # Test with options that already have local_parallelism set
+        preset_options = file_dataset.S3Options.default(local_parallelism=4)
+
+        _ = read_file_dataset(
+            file_dataframe=sample_file_dataframe,
+            batch_size=2,
+            options=preset_options,
+        )
+
+        # Should keep the preset value
+        call_args3 = mock_datasource_init.call_args_list[2]
+        options_arg3 = call_args3[1]["options"]
+        assert options_arg3.local_parallelism == 4
