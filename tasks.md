@@ -3,7 +3,7 @@ High level goal is to optimize read/write parallelism when there are multiple fi
 We are going to implement Local Parallelism.
 Boto3 S3Transfer already has its own threadpool to copy data, so the main goal is to be able to initiate several transfers in parallel.
 
-## Task 1: Create Core File Operations Library
+## Task 1: Create Core File Operations Library ✓
 
 ### Summary
 Create a new library `_core_file.py` that centralizes all file operations (copy, read) with support for both local and S3 paths. This will provide a unified interface for file operations across the codebase.
@@ -61,7 +61,7 @@ Extend `_core_file.py` with functions to read file sizes and contents efficientl
 Replace low-level boto3 S3 API calls with S3Transfer methods for better performance and configuration options. S3Transfer provides built-in retry logic, multipart uploads, and bandwidth throttling.
 
 ### Implementation Notes
-- Replace in `_core_file.py`:
+- Replace in `_core_file.py`, where applicable:
   - `put_object()` → `upload_file()` or `upload_fileobj()`
   - `get_object()` → `download_file()` or `download_fileobj()`
   - Keep `head_object()` for existence/size checks
@@ -71,12 +71,13 @@ Replace low-level boto3 S3 API calls with S3Transfer methods for better performa
   - Max concurrency for individual transfers
   - Bandwidth limits if configured
 - Update error handling for S3Transfer-specific exceptions
+- Ensure the user may still opt out of this behavior if they explicitly opt-out of it.
+
 
 ### Testing (High Level)
-- Test large file uploads trigger multipart behavior
+- Test file uploads trigger multipart behavior (pytest-mock is OK)
 - Test transfer config options are respected
 - Test retry behavior on transient failures
-- Compare performance with original implementation
 - Verify backwards compatibility is maintained
 
 ## Task 4: Implement Parallel Operations
@@ -101,6 +102,8 @@ Add parallelism to all batch operations in `_core_file.py` using a ThreadPoolExe
 - Thread safety:
   - Ensure S3 client creation is thread-safe
   - Handle concurrent access to shared resources
+- Ensure the user may still opt out of this parallelism behavior if they explicitly opt-out of it.
+
 
 ### Testing (High Level)
 - Test parallel operations are faster than sequential

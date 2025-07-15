@@ -2,11 +2,11 @@
 
 import collections.abc
 import logging
-import shutil
 from pathlib import Path
 
 import pandas as pd
 
+from ._core_file import do_copy
 from .exceptions import FileDatasetError
 from .s3_options import S3Options
 from .s3_utils import is_s3_url, parse_s3_url
@@ -53,6 +53,10 @@ def _copy_files_to_destination(
     result: dict[str, Path | None] = {}
     file_errors: dict[str, str] = {}
 
+    # Prepare copies for do_copy
+    copies = []
+    file_map = {}  # Track which copy corresponds to which filename
+
     for filename, source_path in row.items():
         if source_path is None:
             result[filename] = None
@@ -60,12 +64,22 @@ def _copy_files_to_destination(
 
         source = Path(source_path)
         dest = dest_dir / filename
+        copies.append((str(source), str(dest)))
+        file_map[str(dest)] = (filename, dest)
 
+    # Perform all copies at once
+    if copies:
         try:
-            shutil.copy2(source, dest)
-            result[filename] = dest
-        except OSError as e:
-            file_errors[filename] = f"Failed to copy file: {e}"
+            do_copy(copies, s3_options=None)
+            # All copies succeeded
+            for _dest_str, (filename, dest_path) in file_map.items():
+                result[filename] = dest_path
+        except FileDatasetError as e:
+            # Extract file errors from the exception
+            # do_copy uses index as key, we need to map back to filenames
+            for i, (_, (filename, _)) in enumerate(file_map.items()):
+                if str(i) in e.file_errors:
+                    file_errors[filename] = e.file_errors[str(i)]
 
     return result, file_errors
 
@@ -91,7 +105,10 @@ def _upload_files_to_s3(
         FileDatasetError: If any uploads fail
     """
     result = {}
-    upload_errors = {}
+
+    # Prepare copies for do_copy
+    copies = []
+    file_map = {}  # Track which copy corresponds to which filename
 
     for filename, source_path in row.items():
         if source_path is None:
@@ -100,16 +117,26 @@ def _upload_files_to_s3(
 
         source = Path(source_path)
         s3_key = f"{s3_key_prefix}/{filename}"
+        s3_url = f"s3://{bucket}/{s3_key}"
 
+        copies.append((str(source), s3_url))
+        file_map[s3_url] = filename
+
+    # Perform all uploads at once
+    if copies:
         try:
-            options.s3_client.upload_file(str(source), bucket, s3_key)
-            result[filename] = f"s3://{bucket}/{s3_key}"
-        except Exception as e:  # noqa: BLE001
-            upload_errors[filename] = f"Failed to upload file: {e}"
-
-    # If any uploads failed, raise error
-    if upload_errors:
-        raise FileDatasetError(upload_errors, "Failed to upload some files")
+            do_copy(copies, s3_options=options)
+            # All uploads succeeded
+            for s3_url, filename in file_map.items():
+                result[filename] = s3_url
+        except FileDatasetError as e:
+            # Extract file errors from the exception
+            # do_copy uses index as key, we need to map back to filenames
+            upload_errors = {}
+            for i, (_, filename) in enumerate(file_map.items()):
+                if str(i) in e.file_errors:
+                    upload_errors[filename] = e.file_errors[str(i)]
+            raise FileDatasetError(upload_errors, "Failed to upload some files") from e
 
     return result
 

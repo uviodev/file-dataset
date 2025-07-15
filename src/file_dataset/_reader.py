@@ -1,7 +1,6 @@
 """Reader functionality for file datasets."""
 
 import logging
-import shutil
 import tempfile
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -10,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 import pyarrow as pa
 
+from ._core_file import do_copy
 from .exceptions import FileDatasetError
 from .s3_options import S3Options
 from .s3_utils import is_s3_url, parse_s3_url
@@ -130,28 +130,25 @@ class FileRowReader:
         with tempfile.TemporaryDirectory() as temp_dir_str:
             temp_dir = Path(temp_dir_str)
 
-            # Copy each file to temp directory with original filename
+            # Prepare copies for do_copy
+            copies = []
             for filename, source_path in self.files_dict.items():
                 source_str = str(source_path)
                 dest = temp_dir / filename
+                copies.append((source_str, str(dest)))
 
-                try:
-                    if is_s3_url(source_str):
-                        # Download from S3
-                        bucket, key = parse_s3_url(source_str)
-                        self.options.s3_client.download_file(bucket, key, str(dest))
-                    else:
-                        # Local file copy
-                        source = Path(source_path)
-                        shutil.copy2(source, dest)
-                except OSError as e:
-                    file_errors[filename] = f"Failed to copy file: {e}"
-                except Exception as e:  # noqa: BLE001
-                    file_errors[filename] = f"Failed to download file: {e}"
-
-            # If any copies failed, raise error
-            if file_errors:
-                raise FileDatasetError(file_errors, "Failed to copy some files")
+            # Perform all copies at once
+            try:
+                do_copy(copies, s3_options=self.options)
+            except FileDatasetError as e:
+                # Extract file errors from the exception
+                # do_copy uses index as key, we need to map back to filenames
+                file_errors = {}
+                filenames = list(self.files_dict.keys())
+                for i, filename in enumerate(filenames):
+                    if str(i) in e.file_errors:
+                        file_errors[filename] = e.file_errors[str(i)]
+                raise FileDatasetError(file_errors, "Failed to copy some files") from e
 
             yield temp_dir
 

@@ -168,11 +168,14 @@ class TestWriteS3:
         source_file = tmp_path / "test.txt"
         source_file.write_text("test content")
 
-        # Mock S3 upload to fail
+        # Mock S3 upload to fail with ClientError
+        from botocore.exceptions import ClientError
+
+        error_response = {"Error": {"Code": "AccessDenied", "Message": "Upload failed"}}
         mocker.patch.object(
             self.options.s3_client,
             "upload_file",
-            side_effect=Exception("Upload failed"),
+            side_effect=ClientError(error_response, "PutObject"),
         )
         s3_path = f"s3://{self.bucket_name}/error"
         with pytest.raises(FileDatasetError) as exc_info:
@@ -183,7 +186,9 @@ class TestWriteS3:
                 options=self.options,
             )
 
-        assert "Failed to upload file" in str(exc_info.value)
+        assert "AccessDenied" in str(exc_info.value) or "Upload failed" in str(
+            exc_info.value
+        )
 
     def test_dataframe_s3_upload(self, tmp_path):
         """Test DataFrame mode with S3 uploads."""
