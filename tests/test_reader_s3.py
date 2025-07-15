@@ -101,20 +101,21 @@ class TestReaderS3:
         assert "S3 object not found" in exc_info.value.file_errors["missing.txt"]
 
     def test_s3_url_without_options(self, s3_setup):
-        """Test error when S3 URLs are provided without options."""
+        """Test that S3 URLs work with default options when none provided."""
         bucket = s3_setup["bucket"]
 
-        files_dict = {"file.txt": f"s3://{bucket}/test_file.txt"}
+        files_dict = {"file.txt": f"s3://{bucket}/nonexistent_file.txt"}
 
-        # Create reader without options
+        # Create reader without options - should now use defaults
         r = reader(row=files_dict)
 
+        # Should fail due to file not found, not due to missing options
         with pytest.raises(FileDatasetError) as exc_info:
             with r.into_temp_dir():
                 pass
 
-        # Check error mentions options required
-        assert any(
+        # Should not mention "Options required" anymore
+        assert not any(
             "Options required" in error for error in exc_info.value.file_errors.values()
         )
 

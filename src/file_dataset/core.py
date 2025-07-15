@@ -28,9 +28,15 @@ class FileRowReader:
         Args:
             files_dict: Dictionary mapping filenames to their source paths
             options: Optional Options instance for S3 operations
+                (defaults to Options.default())
         """
         self.files_dict = files_dict
-        self.options = options
+        # Initialize default options if none provided and S3 files are present
+        has_s3_files = any(is_s3_url(str(path)) for path in files_dict.values())
+        if options is None and has_s3_files:
+            self.options = Options.default()
+        else:
+            self.options = options
 
     def _validate_s3_file(self, filename: str, source_str: str) -> str | None:  # noqa: ARG002
         """Validate a single S3 file.
@@ -51,7 +57,7 @@ class FileRowReader:
         if not key:  # FileRowReader needs a key to read a file
             return f"Invalid S3 URL format: {source_str}"
 
-        # Check if options are provided for S3
+        # Options should already be initialized in __init__ if needed
         if self.options is None:
             return "Options required for S3 URLs but not provided"
 
@@ -94,7 +100,7 @@ class FileRowReader:
                 elif not source.is_file():
                     file_errors[filename] = f"Source path is not a file: {source}"
 
-        # Check if we have S3 URLs but no options
+        # Check if we have S3 URLs but no options (shouldn't happen with eager init)
         if has_s3_files and self.options is None and not file_errors:
             file_errors["__options__"] = "Options required for S3 URLs but not provided"
 
@@ -476,11 +482,10 @@ def write_files(
         msg = "Must specify either 'row' or 'dataframe' argument"
         raise ValueError(msg)
 
-    # Check if S3 path requires options
+    # Initialize default options if S3 path is used
     if is_s3_url(str(into_path)):
         if options is None:
-            msg = "Options required for S3 paths"
-            raise ValueError(msg)
+            options = Options.default()
         # Validate S3 URL format
         parsed = parse_s3_url(str(into_path))
         if not parsed or not parsed[0]:  # Check for empty bucket name
@@ -507,9 +512,31 @@ class FileDataFrameReader:
         Args:
             dataframe: DataFrame where each row represents files to process
             options: Optional Options instance for S3 operations
+                (defaults to Options.default())
         """
         self.dataframe = dataframe
-        self.options = options
+        # Initialize default options if none provided and S3 files are present
+        has_s3_files = self._dataframe_has_s3_files(dataframe)
+        if options is None and has_s3_files:
+            self.options = Options.default()
+        else:
+            self.options = options
+
+    def _dataframe_has_s3_files(self, dataframe: pd.DataFrame) -> bool:
+        """Check if DataFrame contains any S3 URLs.
+
+        Args:
+            dataframe: DataFrame to check
+
+        Returns:
+            True if any file columns contain S3 URLs
+        """
+        for column in dataframe.columns:
+            if column != "id":  # Skip the id column
+                for value in dataframe[column]:
+                    if value is not None and is_s3_url(str(value)):
+                        return True
+        return False
 
     def into_temp_dir(self) -> Generator[tuple[str, Path], None, None]:
         """Yield (row_id, temporary directory) tuples for each successful row.

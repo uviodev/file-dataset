@@ -1,39 +1,41 @@
-# Task 2: Rename Reader Class
+# Task 3: Improve Options Default Behavior
 
 **Status:** Not Started
 **Priority:** Medium
-**Dependencies:** Task 1 (S3 utilities extraction)
+**Dependencies:** Task 2 (Reader class rename)
 
-**Summary:** Rename `core.Reader` class to `core.FileRowReader` for clarity.
+**Summary:** Change None options behavior to use default Options instead of raising errors.
 
 **Description:**
-The class `core.Reader` should be renamed to `core.FileRowReader` to better reflect its purpose of reading individual file rows. This change requires updating all references in tests and documentation to maintain consistency.
+Modify the behavior when an `options` value of None is passed. Instead of raising an error, the options should be automatically initialized to `Options.default()`. This provides better user experience by offering sensible defaults.
 
 **High-Level Test Descriptions:**
-- Test that `FileRowReader` class maintains all functionality of the original `Reader` class
-- Test import statements and public API access to ensure no breaking changes
-- Test class instantiation and method calls with the new name
-- Regression tests to verify all existing Reader functionality works with new class name
+- Test that passing `options=None` initializes `Options.default()` without errors
+- Test that the default options provide expected S3 client configuration
+- Test that explicit options still override defaults properly
+- Test edge cases where Options.default() might fail and ensure graceful handling
 
 ## Implementation Plan
 
-Based on analyzing the codebase:
+Based on analyzing the codebase, I need to:
 
-1. `core.Reader` class (line 23 in core.py) needs to be renamed to `FileRowReader`
-2. All references to `Reader` in core.py need to be updated to `FileRowReader`
-3. The `reader()` function should still return `FileRowReader` but the public API should remain the same
-4. Tests that instantiate or reference `Reader` directly need to be updated
-5. The import in `__init__.py` may need updating to maintain public API
+1. **Identify where None options cause errors** - Search for places that check `if options is None` and raise errors
+2. **Understand Options.default()** - Check how the default Options are created
+3. **Update error-raising code** - Replace error raising with `Options.default()` initialization
+4. **Update tests** - Modify tests that expect errors to now expect successful execution with defaults
+5. **Add new tests** - Test the new default behavior
+
+**Areas to investigate:**
+- `core.py` - FileRowReader and FileDataFrameReader classes
+- `write_files()` function for S3 operations
+- Any S3-related operations that require options
 
 **Code Changes:**
-1. Rename the `Reader` class to `FileRowReader` in `src/file_dataset/core.py`
-2. Update all internal references within core.py
-3. Update tests that directly import or use the `Reader` class
-4. Verify public API through `__init__.py` remains unchanged
-5. Add tests to verify the new class name works correctly
+1. Replace `if options is None: raise ValueError(...)` with `if options is None: options = Options.default()`
+2. Update related tests to expect default behavior instead of errors
+3. Add tests to verify default options work correctly for S3 operations
 
 **Testing:**
-- Test that all existing Reader functionality works with FileRowReader
-- Test that the reader() function returns FileRowReader instances
-- Test import paths and public API access
-- Regression tests to ensure no functionality is broken
+- Test S3 operations work with None options using default credentials
+- Test that explicit options still override defaults
+- Test error handling when default options fail to initialize

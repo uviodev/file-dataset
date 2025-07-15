@@ -35,7 +35,7 @@ The class `core.Reader` should be renamed to `core.FileRowReader` to better refl
 - Regression tests to verify all existing Reader functionality works with new class name
 
 ## Task 3: Improve Options Default Behavior
-**Status:** Not Started
+**Status:** Done
 **Priority:** Medium
 **Dependencies:** Task 2 (Reader class rename)
 

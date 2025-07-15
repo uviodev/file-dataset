@@ -68,8 +68,7 @@ File dataset can download data
 import file_dataset
 
 s3_data = {"image.mha": "s3://my-bucket/image.mha"}
-options = file_dataset.Options.default()
-with file_dataset.reader(row=s3_data, options=options).into_temp_dir() as tmp:
+with file_dataset.reader(row=s3_data).into_temp_dir() as tmp:
     # Tmp contains a file: image.mha
     # for simplicty we set input=output though
     # general consumers may prefer two distinct temp paths.
@@ -91,12 +90,10 @@ from pathlib import Path
 local_output = {
     "resampled_image.mha": Path("./resampled_image.mha")
 }
-options = file_dataset.Options.default()
 result = file_dataset.write_files(
     local_output,
     into_path="s3://my-bucket/resampled/",
-    id="1",
-    options=options
+    id="1"
 )
 # Returns: {"resampled_image.mha": "s3://my-bucket/resampled/1/resampled_image.mha"}
 # S3 Object contains the local contents
@@ -138,11 +135,9 @@ file_dataframe = pd.DataFrame({
     ]
 })
 
-options = file_dataset.Options.default()
 pipeline = file_dataset.Pipeline(
     fn=resample_local_image_file,
-    into_path="s3://my-bucket/resampled/",
-    options=options
+    into_path="s3://my-bucket/resampled/"
 )
 output_dataframe = pipeline(file_dataframe)
 output_dataframe
@@ -168,12 +163,10 @@ import file_dataset
 
 # inputs_in_s3.csv contains "image.mha" column and "id" columns.
 dataset = ray.data.read_csv("inputs_in_s3.csv")
-options = file_dataset.Options.default()
 resampled_dataset = dataset.map_batches(
     file_dataset.Pipeline(
         fn=resample_local_image_file,
-        into_path="s3://my-bucket/resampled/",
-        options=options
+        into_path="s3://my-bucket/resampled/"
     ),
     batch_format="pandas",
     batch_size=8, # Or however many you'd like per batch.
@@ -204,8 +197,7 @@ s3_dataframe = pd.DataFrame({
     "id": ["row1"],
     "image.mha": ["s3://my-bucket/image_mask.mha"]
 })
-options = file_dataset.Options.default()
-pyarrow_table = file_dataset.reader(dataframe=s3_dataframe, options=options).into_blob_table()
+pyarrow_table = file_dataset.reader(dataframe=s3_dataframe).into_blob_table()
 pyarrow_table.schema
 # Schema with fields: id: string, image.mha: binary
 # has 1 row, which is 1MB in size
@@ -219,8 +211,7 @@ s3_dataframe = pd.DataFrame({
     "id": ["row1"],
     "image.mha": ["s3://my-bucket/image_mask.mha"]
 })
-options = file_dataset.Options.default()
-pyarrow_table = file_dataset.reader(dataframe=s3_dataframe, options=options).into_size_table()
+pyarrow_table = file_dataset.reader(dataframe=s3_dataframe).into_size_table()
 pyarrow_table.schema
 # Schema with fields: id: string, image.mha: int64
 # has 1 row, which has `{"id": "row1", "image.mha": 1048576}` (size in bytes)
@@ -237,8 +228,7 @@ import file_dataset.ray
 
 dataset = file_dataset.ray.read_file_dataset(
     files_dataframe,
-    batch_size=4,
-    options=file_dataset.Options.default()
+    batch_size=4
 )
 ```
 
@@ -249,7 +239,7 @@ TIP: when the user calls `map_batches` on this Ray dataset, consider using zero 
 TIP: If the object files are small, consider writing the data to parquet then simply reading the parquet files directly; this will be more efficient for small files but be significantly worse for large image files.
 
 ## S3 credentials management
-All reader and write functions take as input `file_dataset.Options` which allows the user to specify S3 configuration.
+All reader and write functions take as input `file_dataset.Options` which allows the user to specify S3 configuration. When no options are provided, the library automatically uses `file_dataset.Options.default()` for S3 operations.
 
 The default options (`file_dataset.Options.default()`):
 
@@ -265,12 +255,17 @@ Example:
 ```python
 import file_dataset
 
-# Use default options
-options = file_dataset.Options.default()
+# Simple usage - options are automatically defaulted for S3 operations
+with file_dataset.reader(row={"file.txt": "s3://bucket/file.txt"}).into_temp_dir() as tmp:
+    # Process files...
+    pass
 
-# Or create custom options with specific multipart settings
+# Advanced usage - explicit options for custom configuration
 options = file_dataset.Options.default(
     multipart_threshold=64 * 1024 * 1024,  # 64MB
     multipart_chunksize=16 * 1024 * 1024   # 16MB
 )
+with file_dataset.reader(row={"file.txt": "s3://bucket/file.txt"}, options=options).into_temp_dir() as tmp:
+    # Process files with custom S3 settings...
+    pass
 ```

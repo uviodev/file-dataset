@@ -122,20 +122,24 @@ class TestWriteS3:
             )
 
     def test_s3_upload_without_options(self, tmp_path):
-        """Test that S3 upload fails without options."""
+        """Test that S3 upload works with default options when none provided."""
         # Create test file
         source_file = tmp_path / "test.txt"
         source_file.write_text("test content")
 
-        # Try to write to S3 without options
+        # Try to write to S3 without options - should now work with defaults
         s3_path = f"s3://{self.bucket_name}/test"
-        with pytest.raises(ValueError, match="Options required for S3 paths"):
-            write_files(
-                row={"file.txt": str(source_file)},
-                into_path=s3_path,
-                id="test-id",
-                # No options provided
-            )
+        # This should now succeed and use default options
+        result = write_files(
+            row={"file.txt": str(source_file)},
+            into_path=s3_path,
+            id="test-id",
+            # No options provided - will use defaults
+        )
+
+        # Verify the result contains the S3 URL
+        assert "file.txt" in result
+        assert result["file.txt"].startswith("s3://")
 
     def test_invalid_s3_url_format(self, tmp_path):
         """Test handling of invalid S3 URL formats."""
