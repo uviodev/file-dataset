@@ -83,14 +83,52 @@ Replace low-level boto3 S3 API calls with S3Transfer methods for better performa
 
 ## Task 4: Ensure all s3_client operations are performed in `_core_file.py`
 ### Summary
-Move `validate_files` from the RowReader to `_core_file.py` with functions. Rename top level `validate_each_file(Mapping[str, str | Path], s3_options: S3Options|None, do_existence_checks: bool = True)`. Do basic checks in a function, `_validate_simple_checks(file, s3_options)`; move existence checks for a single file to a new function `_file_exists` (for s3 files uses s3_options.s3_client.head_object() to check existence, for local files uses stat)
+Move `validate_files` from the RowReader to `_core_file.py` with functions. This centralizes all S3 client operations in one module for better maintainability and consistency.
 
-Ensure all method calls in the library src dir on `s3_client` occur in _core_file.py, not reader.py.
+### Implementation Notes
 
+#### 1. Create new validation functions in `_core_file.py`:
+- `validate_each_file(files: Mapping[str, str | Path], s3_options: S3Options | None = None, do_existence_checks: bool = True) -> dict[str, str]`
+  - Main entry point that validates multiple files
+  - Returns dict of errors (empty if all valid)
+  - If `do_existence_checks=False`, only does basic validation (URL format, etc.)
+
+- `_validate_s3_path_format(path: str | Path, s3_options: S3Options | None) -> str | None`
+  - Only validates S3 paths - returns None immediately for local paths
+  - Validates S3 URL format and that s3_options is provided when needed
+  - Returns error message for invalid S3 paths or None if valid
+
+- `_file_exists(path: str | Path, s3_options: S3Options | None) -> bool`
+  - For S3 files: uses `s3_options.s3_client.head_object()` to check existence
+  - For local files: uses `Path.exists()` and `Path.is_file()`
+  - Returns True if file exists and is accessible
+
+#### 2. Refactor FileRowReader in `_reader.py`:
+- Remove `_validate_files()` and `_validate_s3_file()` methods
+- Replace with call to `validate_each_file()` from `_core_file.py`
+- Update `into_temp_dir()` to use the new validation function
+
+#### 3. Migration pattern:
+```python
+# Old code in _reader.py:
+file_errors = self._validate_files()
+
+# New code:
+from file_dataset._core_file import validate_each_file
+file_errors = validate_each_file(self.files_dict, self.options)
+```
 
 ### Testing (High Level)
-- Add new tests for validate_each_file, some that do existence checks and some that don't.
-- Ensure existing tests pass.
+- Add new tests in `test_core_file.py`:
+  - `test_validate_each_file_local_files()` - validates local files exist
+  - `test_validate_each_file_s3_files()` - validates S3 files with mocked head_object
+  - `test_validate_each_file_mixed()` - mix of local and S3 files
+  - `test_validate_each_file_no_existence_checks()` - only format validation
+  - `test_validate_each_file_missing_s3_options()` - error when S3 options missing
+  - `test_file_exists_local()` - test _file_exists for local files
+  - `test_file_exists_s3()` - test _file_exists for S3 files with mocked client
+- Ensure all existing tests in `test_reader.py` still pass after refactoring
+- Verify that FileRowReader still properly validates files before operations
 
 
 
