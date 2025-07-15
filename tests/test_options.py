@@ -10,6 +10,11 @@ from file_dataset import S3Options
 
 def test_options_default_creation(mocker):
     """Test creating S3Options with default settings."""
+    # Clear the cache to ensure clean test
+    from file_dataset.s3_options import _get_default_frozen_credentials
+
+    _get_default_frozen_credentials.cache_clear()
+
     mock_session = mocker.patch("boto3.Session")
     mock_frozen_creds = mocker.MagicMock()
     mock_frozen_creds.access_key = "test_key"
@@ -29,6 +34,28 @@ def test_options_default_creation(mocker):
     # Check that frozen credentials were used
     mock_session.return_value.get_credentials.assert_called_once()
     mock_credentials.get_frozen_credentials.assert_called_once()
+
+
+def test_s3options_credential_caching():
+    """Test that credential retrieval is cached for performance."""
+    from file_dataset.s3_options import _get_default_frozen_credentials
+
+    # Clear cache first
+    _get_default_frozen_credentials.cache_clear()
+
+    # Create multiple S3Options instances
+    options1 = S3Options.default()
+    options2 = S3Options.default()
+    options3 = S3Options.default()
+
+    # All should have the same credentials (cached result)
+    assert options1._session_kwargs == options2._session_kwargs
+    assert options2._session_kwargs == options3._session_kwargs
+
+    # Check cache info shows hits
+    cache_info = _get_default_frozen_credentials.cache_info()
+    assert cache_info.hits >= 2  # Should have at least 2 cache hits
+    assert cache_info.misses == 1  # Should have exactly 1 cache miss (first call)
 
 
 @mock_aws

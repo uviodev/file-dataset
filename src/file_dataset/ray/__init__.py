@@ -49,7 +49,10 @@ def read_file_dataset(
     datasource = FileDataFrameAsBlobDatasource(
         file_dataframe=file_dataframe,
         batch_size=batch_size,
-        options=options,
+        # Here we ensure we always pass valid S3Options.
+        # Ray will pass frozen credentials to the read tasks which will
+        # then minimize load on EC2 Metadata server and prevent some flakiness.
+        options=options or S3Options.default(),
     )
 
     # Create Ray dataset

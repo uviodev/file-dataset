@@ -1,11 +1,26 @@
 """S3Options class for managing S3 configuration and credentials."""
 
+import functools
 import threading
 from typing import Any
 
 import boto3
 from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
+
+
+@functools.cache
+def _get_default_frozen_credentials():
+    """Get frozen credentials from default boto3 session with caching.
+
+    This function is cached to avoid repeatedly creating sessions and
+    retrieving credentials, which can be expensive operations.
+
+    Returns:
+        Frozen credentials from the default boto3 session
+    """
+    session = boto3.Session()
+    return session.get_credentials().get_frozen_credentials()
 
 
 class S3Options:
@@ -59,9 +74,8 @@ class S3Options:
         Returns:
             S3Options instance with default configuration
         """
-        # Get frozen credentials from default session
-        session = boto3.Session()
-        frozen_creds = session.get_credentials().get_frozen_credentials()
+        # Get frozen credentials from default session (cached)
+        frozen_creds = _get_default_frozen_credentials()
 
         # Create session kwargs with frozen credentials
         session_kwargs = {
