@@ -9,14 +9,14 @@ Managing all these files can be cumbersome and subtle; the `file_dataset` librar
 
 To use the `file_dataset` library, users provide:
 
-* a python function that operates on local files, taking an input directory and output directory. This type of pipeline is common in image processing pipelines.
+* a python function that operates on local files, taking a working directory where input files are provided and output files should be written. This type of pipeline is common in image processing pipelines.
 * a file dataset where columns correspond to files and rows correspond to s3 urls.
 
 The `file_dataset` library then provides functionality to read these s3 files at scale, into either local storage or as blobs in memory, as well as upload files from local storage back to s3. The `file_dataset` library has a focus on simplicity:
 
-* Core operations are *eager* and s3 GETs/PUTs are explicit. When you call `file_dataset.reader(dataframe).into_temp_dir()` that copies the data to the temp dir, or when you call `file_dataset.write_files()` that copies the files into s3 immediately.
+* Core operations are *eager* and s3 GETs/PUTs are explicit. When you call `file_dataset.row_reader(data).into_temp_dir()` that copies the data to the temp dir, or when you call `file_dataset.write_files()` that copies the files into s3 immediately.
 * `file_dataset` deals only in Bytes; serialization/deserialization is left up to the user.
-* User may create a `file_dataset.Pipeline` that reads data locally, invokes their user-defined function with an input and output dir, and then uploads the outputs to s3. This pipeline can then be called for each row in a file dataset represented as a pandas dataframe.
+* User may create a `file_dataset.Pipeline` that reads data locally, invokes their user-defined function with a working directory, and then uploads the outputs to s3. This pipeline can then be called for each row in a file dataset represented as a pandas dataframe.
 * Ray Data integration is provided to simplify large-scale dataset processing.
     * Mapping from one file dataset to another can be achieved with `ray.data.Dataset.map_batches` and a file dataset pipeline.
     * file datasets can be loaded into cluster memory for training as a custom ray data source, which allows them to be consumed directly or converted to a different format as a preprocessing step.
@@ -44,12 +44,20 @@ ResampledOutput = TypedDict(
     }
 )
 
-def resample_local_image_file(
-    input_dir: Path,
-    output_dir: Path) -> ResampledOutput:
-    image = sitk.ReadImage(working_dir / "input.mha")
+def resample_local_image(working_dir: Path) -> ResampledOutput:
+    """Process image files in working directory and return output files.
+
+    Args:
+        working_dir: Directory containing input files and where outputs will be written
+
+    Returns:
+        Dictionary mapping output filenames to their paths
+    """
+    # Read input image from working directory (matches column name "image.mha")
+    image = sitk.ReadImage(working_dir / "image.mha")
     resampled_image = sitk.ResampleImage(image)
-    output_file = output_dir / "output.mha"
+    # Write output to working directory
+    output_file = working_dir / "output.mha"
     sitk.WriteImage(resampled_image, output_file)
     return {"output.mha": output_file}
 
@@ -68,13 +76,10 @@ File dataset can download data
 import file_dataset
 
 s3_data = {"image.mha": "s3://my-bucket/image.mha"}
-with file_dataset.reader(row=s3_data).into_temp_dir() as tmp:
-    # Tmp contains a file: image.mha
-    # for simplicty we set input=output though
-    # general consumers may prefer two distinct temp paths.
-    local_output = resample_local_image_file(
-        input_dir=tmp,
-        output_dir=tmp)
+with file_dataset.row_reader(s3_data).into_temp_dir() as tmp:
+    # tmp contains a file: image.mha downloaded from S3
+    # Process files in the working directory
+    local_output = resample_local_image(working_dir=tmp)
     # User may now continue processing with `local_output`.
 ```
 
@@ -136,7 +141,7 @@ file_dataframe = pd.DataFrame({
 })
 
 pipeline = file_dataset.Pipeline(
-    fn=resample_local_image_file,
+    fn=resample_local_image,
     into_path="s3://my-bucket/resampled/"
 )
 output_dataframe = pipeline(file_dataframe)
@@ -165,7 +170,7 @@ import file_dataset
 dataset = ray.data.read_csv("inputs_in_s3.csv")
 resampled_dataset = dataset.map_batches(
     file_dataset.Pipeline(
-        fn=resample_local_image_file,
+        fn=resample_local_image,
         into_path="s3://my-bucket/resampled/"
     ),
     batch_format="pandas",
@@ -197,7 +202,7 @@ s3_dataframe = pd.DataFrame({
     "id": ["row1"],
     "image.mha": ["s3://my-bucket/image_mask.mha"]
 })
-pyarrow_table = file_dataset.reader(dataframe=s3_dataframe).into_blob_table()
+pyarrow_table = file_dataset.file_dataframe_reader(s3_dataframe).into_blob_table()
 pyarrow_table.schema
 # Schema with fields: id: string, image.mha: binary
 # has 1 row, which is 1MB in size
@@ -211,7 +216,7 @@ s3_dataframe = pd.DataFrame({
     "id": ["row1"],
     "image.mha": ["s3://my-bucket/image_mask.mha"]
 })
-pyarrow_table = file_dataset.reader(dataframe=s3_dataframe).into_size_table()
+pyarrow_table = file_dataset.file_dataframe_reader(s3_dataframe).into_size_table()
 pyarrow_table.schema
 # Schema with fields: id: string, image.mha: int64
 # has 1 row, which has `{"id": "row1", "image.mha": 1048576}` (size in bytes)
@@ -256,7 +261,7 @@ Example:
 import file_dataset
 
 # Simple usage - options are automatically defaulted for S3 operations
-with file_dataset.reader(row={"file.txt": "s3://bucket/file.txt"}).into_temp_dir() as tmp:
+with file_dataset.row_reader({"file.txt": "s3://bucket/file.txt"}).into_temp_dir() as tmp:
     # Process files...
     pass
 
@@ -265,7 +270,7 @@ options = file_dataset.S3Options.default(
     multipart_threshold=64 * 1024 * 1024,  # 64MB
     multipart_chunksize=16 * 1024 * 1024   # 16MB
 )
-with file_dataset.reader(row={"file.txt": "s3://bucket/file.txt"}, options=options).into_temp_dir() as tmp:
+with file_dataset.row_reader({"file.txt": "s3://bucket/file.txt"}, options=options).into_temp_dir() as tmp:
     # Process files with custom S3 settings...
     pass
 ```
