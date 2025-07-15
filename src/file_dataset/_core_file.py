@@ -1,4 +1,10 @@
-"""Core file operations for file-dataset."""
+"""Core file operations for file-dataset.
+
+This module provides unified file operations for both local and S3 files.
+All S3 operations use boto3's S3Transfer API for better performance,
+including support for multipart uploads, automatic retries, and
+configurable transfer settings via S3Options.transfer_config.
+"""
 
 import shutil
 from collections.abc import Mapping
@@ -126,12 +132,12 @@ def _copy_single_file(
         # S3 to local
         bucket, key = parse_s3_url(src_str)
         s3_client = s3_options.s3_client
-        s3_client.download_file(bucket, key, dst_str)
+        s3_client.download_file(bucket, key, dst_str, Config=s3_options.transfer_config)
     elif not src_is_s3 and dst_is_s3:
         # Local to S3
         bucket, key = parse_s3_url(dst_str)
         s3_client = s3_options.s3_client
-        s3_client.upload_file(src_str, bucket, key)
+        s3_client.upload_file(src_str, bucket, key, Config=s3_options.transfer_config)
     else:
         # S3 to S3
         src_bucket, src_key = parse_s3_url(src_str)
@@ -220,11 +226,16 @@ def _read_file_contents(path: str | Path, s3_options: S3Options | None) -> bytes
     path_str = str(path)
 
     if is_s3_url(path_str):
-        # S3 file
+        # S3 file - use download_fileobj for S3Transfer support
+        from io import BytesIO
+
         bucket, key = parse_s3_url(path_str)
         s3_client = s3_options.s3_client
-        response = s3_client.get_object(Bucket=bucket, Key=key)
-        return response["Body"].read()
+        fileobj = BytesIO()
+        s3_client.download_fileobj(
+            bucket, key, fileobj, Config=s3_options.transfer_config
+        )
+        return fileobj.getvalue()
     # Local file
     return Path(path_str).read_bytes()
 

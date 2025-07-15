@@ -55,7 +55,7 @@ Extend `_core_file.py` with functions to read file sizes and contents efficientl
 - Verify memory efficiency with large files
 - Test that refactored table functions maintain compatibility
 
-## Task 3: Migrate to S3Transfer API
+## Task 3: Migrate to S3Transfer API ✓
 
 ### Summary
 Replace low-level boto3 S3 API calls with S3Transfer methods for better performance and configuration options. S3Transfer provides built-in retry logic, multipart uploads, and bandwidth throttling.
@@ -80,7 +80,21 @@ Replace low-level boto3 S3 API calls with S3Transfer methods for better performa
 - Test retry behavior on transient failures
 - Verify backwards compatibility is maintained
 
-## Task 4: Implement Parallel Operations
+
+## Task 4: Ensure all s3_client operations are performed in `_core_file.py`
+### Summary
+Move `validate_files` from the RowReader to `_core_file.py` with functions. Rename top level `validate_each_file(Mapping[str, str | Path], s3_options: S3Options|None, do_existence_checks: bool = True)`. Do basic checks in a function, `_validate_simple_checks(file, s3_options)`; move existence checks for a single file to a new function `_file_exists` (for s3 files uses s3_options.s3_client.head_object() to check existence, for local files uses stat)
+
+Ensure all method calls in the library src dir on `s3_client` occur in _core_file.py, not reader.py.
+
+
+### Testing (High Level)
+- Add new tests for validate_each_file, some that do existence checks and some that don't.
+- Ensure existing tests pass.
+
+
+
+## Task 5: Implement Parallel Operations
 
 ### Summary
 Add parallelism to all batch operations in `_core_file.py` using a ThreadPoolExecutor. This will significantly improve performance when working with multiple files.
@@ -92,9 +106,10 @@ Add parallelism to all batch operations in `_core_file.py` using a ThreadPoolExe
   - Implement `__del__` to clean up executor (no context manager)
   - Executor is reused across operations for efficiency
 - Parallelize operations:
-  - `do_copy()`: Submit each copy to executor, wait for all
-  - `read_file_sizes()`: Submit each size read to executor
-  - `read_file_contents()`: Submit each content read to executor
+  - `do_each_copy()`: Submit each copy to executor, wait for all. Make sure the fast checks (like unique destinations) are done synchronously beforehand though.
+  - `read_each_file_size()`: Submit each size read to executor
+  - `read_each_file_contents()`: Submit each content read to executor
+  - `validate_each_file()`: Submit each existence check to executor. Make sure the fast checks (like is_s3 and has s3_options) are done synchronously beforehand though.
 - Error handling:
   - Collect exceptions from parallel operations
   - Return partial results where appropriate

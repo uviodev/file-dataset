@@ -130,6 +130,15 @@ class S3Options:
                     self._s3_client = session.client("s3", **self._s3_client_kwargs)
         return self._s3_client
 
+    @property
+    def transfer_config(self) -> TransferConfig:
+        """Get the S3 transfer configuration.
+
+        Returns:
+            S3Transfer configuration object
+        """
+        return self._s3_transfer_config
+
     def __getstate__(self) -> dict[str, Any]:
         """Get state for pickling.
 
