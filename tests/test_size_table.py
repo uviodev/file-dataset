@@ -2,7 +2,6 @@
 
 import pandas as pd
 import pyarrow as pa
-import pytest
 from moto import mock_aws
 
 import file_dataset
@@ -23,7 +22,7 @@ def test_dataframe_reader_into_size_table_local_files(tmp_path):
     )
 
     # Create reader and get size table
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
     table = reader.into_size_table()
 
     # Verify table structure
@@ -72,7 +71,7 @@ def test_dataframe_reader_into_size_table_s3_files():
 
     # Create reader with options and get size table
     options = Options.default()
-    reader = file_dataset.reader(dataframe=df, options=options)
+    reader = file_dataset.file_dataframe_reader(df, options=options)
     table = reader.into_size_table()
 
     # Verify table structure
@@ -106,7 +105,7 @@ def test_dataframe_reader_into_size_table_head_parameter(tmp_path):
     )
 
     # Create reader and get size table with head=2
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
     table = reader.into_size_table(head=2)
 
     # Should only have 2 rows
@@ -133,7 +132,7 @@ def test_dataframe_reader_into_size_table_missing_files(tmp_path, caplog):
     )
 
     # Create reader and get size table
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
     table = reader.into_size_table()
 
     # Should have 1 row with only the good file
@@ -161,7 +160,7 @@ def test_dataframe_reader_into_size_table_schema_validation(tmp_path):
     df = pd.DataFrame({"id": ["row1"], "data": [str(test_file)]})
 
     # Create reader and get size table
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
     table = reader.into_size_table()
 
     # Check schema
@@ -169,20 +168,3 @@ def test_dataframe_reader_into_size_table_schema_validation(tmp_path):
     assert len(schema) == 2
     assert schema.field("id").type == pa.string()
     assert schema.field("data").type == pa.int64()
-
-
-def test_reader_into_size_table_not_implemented(tmp_path):
-    """Test that single FileRowReader raises NotImplementedError."""
-    # Create test file
-    test_file = tmp_path / "file.txt"
-    test_file.write_text("hello")
-
-    # Create single-row reader
-    reader = file_dataset.reader(row={"data": str(test_file)})
-
-    # Should raise NotImplementedError
-    with pytest.raises(
-        NotImplementedError,
-        match="Size table not supported for single-row FileRowReader",
-    ):
-        reader.into_size_table()

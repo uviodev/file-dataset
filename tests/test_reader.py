@@ -4,18 +4,50 @@ from pathlib import Path
 
 import pytest
 
-from file_dataset import FileDatasetError, reader
+from file_dataset import FileDatasetError, row_reader
 
 
 class TestReader:
     """Test cases for the reader functionality."""
+
+    def test_row_reader_single_file_copy(self):
+        """Test row_reader copying a single file to temp directory."""
+        test_file = Path(__file__).parent / "data" / "test_image.txt"
+        files_dict = {"image.txt": test_file}
+
+        with row_reader(files_dict).into_temp_dir() as temp_dir:
+            # Check temp directory exists and contains the file
+            assert temp_dir.exists()
+            assert temp_dir.is_dir()
+
+            copied_file = temp_dir / "image.txt"
+            assert copied_file.exists()
+            assert copied_file.is_file()
+
+            # Check file content is preserved
+            original_content = test_file.read_text()
+            copied_content = copied_file.read_text()
+            assert original_content == copied_content
+
+    def test_row_reader_no_table_methods(self):
+        """Test that FileRowReader doesn't have table methods."""
+        test_file = Path(__file__).parent / "data" / "test_image.txt"
+        files_dict = {"image.txt": test_file}
+
+        file_row_reader = row_reader(files_dict)
+
+        # These methods should not exist on FileRowReader anymore
+        assert not hasattr(file_row_reader, "into_size_table")
+        assert not hasattr(file_row_reader, "into_blob_table")
+        # FileRowReader should not have into_temp_dirs (only FileDataFrameReader should)
+        assert not hasattr(file_row_reader, "into_temp_dirs")
 
     def test_single_file_copy(self):
         """Test copying a single file to temp directory."""
         test_file = Path(__file__).parent / "data" / "test_image.txt"
         files_dict = {"image.txt": test_file}
 
-        with reader(row=files_dict).into_temp_dir() as temp_dir:
+        with row_reader(files_dict).into_temp_dir() as temp_dir:
             # Check temp directory exists and contains the file
             assert temp_dir.exists()
             assert temp_dir.is_dir()
@@ -38,7 +70,7 @@ class TestReader:
             "config.json": test_data_dir / "test_config.json",
         }
 
-        with reader(row=files_dict).into_temp_dir() as temp_dir:
+        with row_reader(files_dict).into_temp_dir() as temp_dir:
             # Check all files exist in temp directory
             for filename in files_dict:
                 copied_file = temp_dir / filename
@@ -56,7 +88,7 @@ class TestReader:
 
         with (
             pytest.raises(FileDatasetError) as exc_info,
-            reader(row=files_dict).into_temp_dir(),
+            row_reader(files_dict).into_temp_dir(),
         ):
             pass  # Should not reach this point
 
@@ -71,7 +103,7 @@ class TestReader:
         files_dict = {"image.txt": test_file}
 
         temp_dir_path = None
-        with reader(row=files_dict).into_temp_dir() as temp_dir:
+        with row_reader(files_dict).into_temp_dir() as temp_dir:
             temp_dir_path = temp_dir
             assert temp_dir.exists()
 
@@ -82,7 +114,7 @@ class TestReader:
         """Test handling of empty files dictionary."""
         files_dict = {}
 
-        with reader(row=files_dict).into_temp_dir() as temp_dir:
+        with row_reader(files_dict).into_temp_dir() as temp_dir:
             assert temp_dir.exists()
             assert temp_dir.is_dir()
             # Directory should be empty

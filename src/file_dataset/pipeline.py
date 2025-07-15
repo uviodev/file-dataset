@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ._reader import reader
+from ._reader import file_dataframe_reader
 from ._writer import write_files
 from .exceptions import FileDatasetError
 from .file_dataframe import get_file_columns, validate_file_dataframe
@@ -84,7 +84,7 @@ class Pipeline:
         filtered_dataframe = dataframe[filtered_columns].copy()
 
         # Create reader for processing
-        df_reader = reader(dataframe=filtered_dataframe, options=self.options)
+        df_reader = file_dataframe_reader(filtered_dataframe, options=self.options)
 
         # Process each row
         successful_rows = []

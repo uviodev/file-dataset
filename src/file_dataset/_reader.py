@@ -153,32 +153,6 @@ class FileRowReader:
 
             yield temp_dir
 
-    def into_size_table(self, head: int | None = None) -> pa.Table:
-        """Create PyArrow table with file sizes.
-
-        Args:
-            head: Limit to first N rows (not applicable for single Reader)
-
-        Raises:
-            NotImplementedError: Size table not supported for single-row FileRowReader
-        """
-        raise NotImplementedError(
-            "Size table not supported for single-row FileRowReader"
-        )
-
-    def into_blob_table(self, head: int | None = None) -> pa.Table:
-        """Create PyArrow table with file contents as binary data.
-
-        Args:
-            head: Limit to first N rows (not applicable for single Reader)
-
-        Raises:
-            NotImplementedError: Blob table not supported for single-row FileRowReader
-        """
-        raise NotImplementedError(
-            "Blob table not supported for single-row FileRowReader"
-        )
-
 
 class FileDataFrameReader:
     """Handles reading files from DataFrames with row-level error handling."""
@@ -264,6 +238,19 @@ class FileDataFrameReader:
                 {"all_rows": "All rows failed to process"},
                 "All rows failed. Check error logs for details.",
             )
+
+    def into_temp_dirs(self) -> Generator[tuple[str, Path], None, None]:
+        """Yield (row_id, temporary directory) tuples for each successful row.
+
+        This is an alias for into_temp_dir() with a more descriptive name.
+
+        Yields:
+            Tuple of (row_id, Path) for each successful row
+
+        Raises:
+            FileDatasetError: If all rows fail to process
+        """
+        yield from self.into_temp_dir()
 
     def _get_file_size(self, file_path: str) -> int:
         """Get file size for local or S3 file.
@@ -570,35 +557,31 @@ class FileDataFrameReader:
         return pa.table(result_df, schema=schema)
 
 
-def reader(
-    *,
-    row: dict[str, str | Path] | None = None,
-    dataframe: pd.DataFrame | None = None,
-    options: Options | None = None,
-) -> FileRowReader | FileDataFrameReader:
-    """Create a FileRowReader instance for the given files or DataFrame.
+def row_reader(
+    row: dict[str, str | Path], options: Options | None = None
+) -> FileRowReader:
+    """Create a FileRowReader instance for the given row of files.
 
     Args:
-        row: Dictionary mapping filenames to their source paths (keyword-only)
-        dataframe: DataFrame where each row contains files to process (keyword-only)
-        options: Optional Options instance for S3 operations (keyword-only)
+        row: Dictionary mapping filenames to their source paths
+        options: Optional Options instance for S3 operations
 
     Returns:
-        FileRowReader or FileDataFrameReader instance
-
-    Raises:
-        ValueError: If both row and dataframe are provided, or if neither is provided
+        FileRowReader instance
     """
-    # Check mutual exclusivity
-    if row is not None and dataframe is not None:
-        msg = "Cannot specify both 'row' and 'dataframe' arguments"
-        raise ValueError(msg)
-
-    if row is None and dataframe is None:
-        msg = "Must specify either 'row' or 'dataframe' argument"
-        raise ValueError(msg)
-
-    # Return appropriate reader
-    if dataframe is not None:
-        return FileDataFrameReader(dataframe, options)
     return FileRowReader(row, options)
+
+
+def file_dataframe_reader(
+    dataframe: pd.DataFrame, options: Options | None = None
+) -> FileDataFrameReader:
+    """Create a FileDataFrameReader instance for the given DataFrame.
+
+    Args:
+        dataframe: DataFrame where each row contains files to process
+        options: Optional Options instance for S3 operations
+
+    Returns:
+        FileDataFrameReader instance
+    """
+    return FileDataFrameReader(dataframe, options)

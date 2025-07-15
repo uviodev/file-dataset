@@ -4,7 +4,7 @@ import boto3
 import pytest
 from moto import mock_aws
 
-from file_dataset import FileDatasetError, Options, reader
+from file_dataset import FileDatasetError, Options, row_reader
 
 
 @pytest.fixture
@@ -30,6 +30,28 @@ def s3_setup():
 class TestReaderS3:
     """Test cases for the reader S3 functionality."""
 
+    def test_row_reader_single_s3_file_download(self, s3_setup):
+        """Test downloading a single file from S3 using new row_reader API."""
+        bucket = s3_setup["bucket"]
+        test_data = s3_setup["test_data"]
+
+        files_dict = {"downloaded.txt": f"s3://{bucket}/test_file.txt"}
+
+        # Create reader with default options using new API
+        r = row_reader(files_dict, options=Options.default())
+
+        with r.into_temp_dir() as temp_dir:
+            # Check temp directory exists and contains the file
+            assert temp_dir.exists()
+            assert temp_dir.is_dir()
+
+            downloaded_file = temp_dir / "downloaded.txt"
+            assert downloaded_file.exists()
+            assert downloaded_file.is_file()
+
+            # Check file content is correct
+            assert downloaded_file.read_bytes() == test_data
+
     def test_single_s3_file_download(self, s3_setup):
         """Test downloading a single file from S3."""
         bucket = s3_setup["bucket"]
@@ -38,7 +60,7 @@ class TestReaderS3:
         files_dict = {"downloaded.txt": f"s3://{bucket}/test_file.txt"}
 
         # Create reader with default options
-        r = reader(row=files_dict, options=Options.default())
+        r = row_reader(files_dict, options=Options.default())
 
         with r.into_temp_dir() as temp_dir:
             # Check temp directory exists and contains the file
@@ -69,7 +91,7 @@ class TestReaderS3:
         }
 
         # Create reader with options for S3
-        r = reader(row=files_dict, options=Options.default())
+        r = row_reader(files_dict, options=Options.default())
 
         with r.into_temp_dir() as temp_dir:
             # Check both files exist
@@ -90,7 +112,7 @@ class TestReaderS3:
         # Reference a non-existent S3 object
         files_dict = {"missing.txt": f"s3://{bucket}/does_not_exist.txt"}
 
-        r = reader(row=files_dict, options=Options.default())
+        r = row_reader(files_dict, options=Options.default())
 
         with pytest.raises(FileDatasetError) as exc_info:
             with r.into_temp_dir():
@@ -107,7 +129,7 @@ class TestReaderS3:
         files_dict = {"file.txt": f"s3://{bucket}/nonexistent_file.txt"}
 
         # Create reader without options - should now use defaults
-        r = reader(row=files_dict)
+        r = row_reader(files_dict)
 
         # Should fail due to file not found, not due to missing options
         with pytest.raises(FileDatasetError) as exc_info:
@@ -126,7 +148,7 @@ class TestReaderS3:
             "bad2.txt": "s3://bucket",  # Missing key
         }
 
-        r = reader(row=files_dict, options=Options.default())
+        r = row_reader(files_dict, options=Options.default())
 
         with pytest.raises(FileDatasetError) as exc_info:
             with r.into_temp_dir():
@@ -147,7 +169,7 @@ class TestReaderS3:
         files_dict = {"local.txt": str(local_file)}
 
         # Create reader without options (should work for local files)
-        r = reader(row=files_dict)
+        r = row_reader(files_dict)
 
         with r.into_temp_dir() as temp_dir:
             copied_file = temp_dir / "local.txt"
@@ -163,13 +185,13 @@ class TestReaderS3:
 
         # Test with explicit options
         explicit_opts = Options.default()
-        r1 = reader(row=files_dict, options=explicit_opts)
+        r1 = row_reader(files_dict, options=explicit_opts)
 
         with r1.into_temp_dir() as temp_dir:
             assert (temp_dir / "file.txt").read_bytes() == test_data
 
         # Test with default options created inline
-        r2 = reader(row=files_dict, options=Options.default())
+        r2 = row_reader(files_dict, options=Options.default())
 
         with r2.into_temp_dir() as temp_dir:
             assert (temp_dir / "file.txt").read_bytes() == test_data

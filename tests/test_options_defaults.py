@@ -25,7 +25,7 @@ def test_reader_s3_without_options_uses_defaults():
     """Test that reader with S3 URLs uses default options when None provided."""
     # This should now use default options and fail later due to network/auth issues
     # rather than failing due to missing options
-    reader = file_dataset.reader(row={"test.txt": "s3://test-bucket/nonexistent.txt"})
+    reader = file_dataset.row_reader({"test.txt": "s3://test-bucket/nonexistent.txt"})
 
     # The validation should now use default options but fail due to network/auth
     with pytest.raises(FileDatasetError) as exc_info:
@@ -46,8 +46,8 @@ def test_explicit_options_override_defaults():
     custom_options = Options.default()
 
     # Should use the provided options, not defaults
-    reader = file_dataset.reader(
-        row={"test.txt": "s3://bucket/file.txt"}, options=custom_options
+    reader = file_dataset.row_reader(
+        {"test.txt": "s3://bucket/file.txt"}, options=custom_options
     )
 
     # The reader should use our custom options instance
@@ -62,7 +62,7 @@ def test_dataframe_reader_uses_defaults():
     df = pd.DataFrame({"id": ["row1"], "file": ["s3://bucket/file.txt"]})
 
     # Should use default options for S3 operations
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
 
     # When processing fails due to network/auth, not missing options
     with pytest.raises(FileDatasetError) as exc_info:
@@ -79,7 +79,7 @@ def test_size_table_uses_defaults():
 
     df = pd.DataFrame({"id": ["row1"], "file": ["s3://bucket/file.txt"]})
 
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
 
     # Should fail due to network/auth, not missing options
     with pytest.raises(FileDatasetError) as exc_info:
@@ -96,7 +96,7 @@ def test_blob_table_uses_defaults():
 
     df = pd.DataFrame({"id": ["row1"], "file": ["s3://bucket/file.txt"]})
 
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
 
     # Should fail due to network/auth, not missing options
     with pytest.raises(FileDatasetError) as exc_info:
@@ -129,7 +129,7 @@ def test_options_initialized_eagerly_and_shared():
         )
 
         # Create reader - should call Options.default() once
-        reader = file_dataset.reader(dataframe=df)
+        reader = file_dataset.file_dataframe_reader(df)
 
         # Verify Options.default() was called exactly once during initialization
         assert mock_default.call_count == 1
@@ -163,7 +163,7 @@ def test_filerowreader_options_initialized_eagerly():
         "file_dataset._reader.Options.default", return_value=mock_options
     ) as mock_default:
         # Create reader with S3 files
-        reader = file_dataset.reader(row={"file1.txt": "s3://bucket/file1.txt"})
+        reader = file_dataset.row_reader({"file1.txt": "s3://bucket/file1.txt"})
 
         # Verify Options.default() was called exactly once
         assert mock_default.call_count == 1

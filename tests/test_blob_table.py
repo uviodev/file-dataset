@@ -2,7 +2,6 @@
 
 import pandas as pd
 import pyarrow as pa
-import pytest
 from moto import mock_aws
 
 import file_dataset
@@ -23,7 +22,7 @@ def test_dataframe_reader_into_blob_table_local_files(tmp_path):
     )
 
     # Create reader and get blob table
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
     table = reader.into_blob_table()
 
     # Verify table structure
@@ -72,7 +71,7 @@ def test_dataframe_reader_into_blob_table_s3_files():
 
     # Create reader with options and get blob table
     options = Options.default()
-    reader = file_dataset.reader(dataframe=df, options=options)
+    reader = file_dataset.file_dataframe_reader(df, options=options)
     table = reader.into_blob_table()
 
     # Verify table structure
@@ -106,7 +105,7 @@ def test_dataframe_reader_into_blob_table_head_parameter(tmp_path):
     )
 
     # Create reader and get blob table with head=2
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
     table = reader.into_blob_table(head=2)
 
     # Should only have 2 rows
@@ -133,7 +132,7 @@ def test_dataframe_reader_into_blob_table_missing_files(tmp_path, caplog):
     )
 
     # Create reader and get blob table
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
     table = reader.into_blob_table()
 
     # Should have 1 row with only the good file
@@ -161,7 +160,7 @@ def test_dataframe_reader_into_blob_table_schema_validation(tmp_path):
     df = pd.DataFrame({"id": ["row1"], "data": [str(test_file)]})
 
     # Create reader and get blob table
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
     table = reader.into_blob_table()
 
     # Check schema
@@ -181,7 +180,7 @@ def test_dataframe_reader_into_blob_table_mixed_sources(tmp_path):
     # For now, just test local files in this test
     df = pd.DataFrame({"id": ["row1"], "local_data": [str(local_file)]})
 
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
     table = reader.into_blob_table()
 
     df_result = table.to_pandas()
@@ -199,29 +198,12 @@ def test_dataframe_reader_into_blob_table_binary_data(tmp_path):
     df = pd.DataFrame({"id": ["row1"], "binary_data": [str(binary_file)]})
 
     # Create reader and get blob table
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
     table = reader.into_blob_table()
 
     # Verify binary content is preserved
     df_result = table.to_pandas()
     assert df_result.iloc[0]["binary_data"] == binary_content
-
-
-def test_reader_into_blob_table_not_implemented(tmp_path):
-    """Test that single FileRowReader raises NotImplementedError."""
-    # Create test file
-    test_file = tmp_path / "file.txt"
-    test_file.write_text("hello")
-
-    # Create single-row reader
-    reader = file_dataset.reader(row={"data": str(test_file)})
-
-    # Should raise NotImplementedError
-    with pytest.raises(
-        NotImplementedError,
-        match="Blob table not supported for single-row FileRowReader",
-    ):
-        reader.into_blob_table()
 
 
 def test_dataframe_reader_into_blob_table_empty_dataframe():
@@ -230,7 +212,7 @@ def test_dataframe_reader_into_blob_table_empty_dataframe():
     df = pd.DataFrame(columns=["id", "data"])
 
     # Create reader and get blob table
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
     table = reader.into_blob_table()
 
     # Should return empty table with correct schema
@@ -254,7 +236,7 @@ def test_dataframe_reader_into_blob_table_none_values(tmp_path):
     )
 
     # Create reader and get blob table
-    reader = file_dataset.reader(dataframe=df)
+    reader = file_dataset.file_dataframe_reader(df)
     table = reader.into_blob_table()
 
     # Should have 1 row with only the required file

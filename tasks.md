@@ -87,7 +87,7 @@ Consolidate the concept of a `file_dataframe` into a new file, `file_dataframe.p
 
 
 ## Task 6: Split Reader API for Better Separation of Concerns
-**Status:** Not Started
+**Status:** Done
 **Priority:** High
 
 **Summary:** Split the overloaded reader() function into row_reader() and file_dataframe_reader() with distinct interfaces.

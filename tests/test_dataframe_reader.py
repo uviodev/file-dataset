@@ -7,11 +7,76 @@ import pandas as pd
 import pytest
 from moto import mock_aws
 
-from file_dataset import FileDatasetError, Options, reader
+from file_dataset import FileDatasetError, Options, file_dataframe_reader
 
 
 class TestDataFrameReader:
     """Test cases for the DataFrame reader functionality."""
+
+    def test_file_dataframe_reader_all_successful_rows(self):
+        """Test file_dataframe_reader where all rows have valid files."""
+        test_data_dir = Path(__file__).parent / "data"
+
+        # Create DataFrame with multiple rows of valid files
+        df = pd.DataFrame(
+            [
+                {
+                    "id": "row1",
+                    "image.txt": str(test_data_dir / "test_image.txt"),
+                    "mask.txt": str(test_data_dir / "test_mask.txt"),
+                },
+                {
+                    "id": "row2",
+                    "image.txt": str(test_data_dir / "test_config.json"),
+                    "mask.txt": str(test_data_dir / "test_mask.txt"),
+                },
+            ]
+        )
+
+        # Create reader with DataFrame using new API
+        df_reader = file_dataframe_reader(df)
+
+        # Process all rows and verify each gets its own temp dir
+        temp_dirs = []
+        row_ids = []
+        for row_id, temp_dir in df_reader.into_temp_dirs():
+            assert temp_dir.exists()
+            assert temp_dir.is_dir()
+
+            # Check files exist in temp dir
+            assert (temp_dir / "image.txt").exists()
+            assert (temp_dir / "mask.txt").exists()
+
+            temp_dirs.append(temp_dir)
+            row_ids.append(row_id)
+
+        # Should have processed both rows
+        assert len(temp_dirs) == 2
+        assert len(row_ids) == 2
+        # Verify row IDs are correct
+        assert set(row_ids) == {"row1", "row2"}
+
+    def test_file_dataframe_reader_has_all_methods(self):
+        """Test that FileDataFrameReader has all expected methods."""
+        test_data_dir = Path(__file__).parent / "data"
+
+        # Create DataFrame
+        df = pd.DataFrame(
+            [
+                {
+                    "id": "row1",
+                    "image.txt": str(test_data_dir / "test_image.txt"),
+                }
+            ]
+        )
+
+        df_reader = file_dataframe_reader(df)
+
+        # Should have all these methods
+        assert hasattr(df_reader, "into_temp_dir")
+        assert hasattr(df_reader, "into_temp_dirs")
+        assert hasattr(df_reader, "into_size_table")
+        assert hasattr(df_reader, "into_blob_table")
 
     def test_all_successful_rows(self):
         """Test reading DataFrame where all rows have valid files."""
@@ -34,7 +99,7 @@ class TestDataFrameReader:
         )
 
         # Create reader with DataFrame
-        df_reader = reader(dataframe=df)
+        df_reader = file_dataframe_reader(df)
 
         # Process all rows and verify each gets its own temp dir
         temp_dirs = []
@@ -82,7 +147,7 @@ class TestDataFrameReader:
         )
 
         # Create reader with DataFrame
-        df_reader = reader(dataframe=df)
+        df_reader = file_dataframe_reader(df)
 
         # Process rows - should skip failing row
         temp_dirs = []
@@ -107,7 +172,7 @@ class TestDataFrameReader:
         df = pd.DataFrame()
 
         # Create reader with empty DataFrame
-        df_reader = reader(dataframe=df)
+        df_reader = file_dataframe_reader(df)
 
         # Process rows - should yield nothing
         results = list(df_reader.into_temp_dir())
@@ -135,7 +200,7 @@ class TestDataFrameReader:
         )
 
         # Create reader with DataFrame
-        df_reader = reader(dataframe=df)
+        df_reader = file_dataframe_reader(df)
 
         # Should raise error when all rows fail
         with pytest.raises(FileDatasetError) as exc_info:
@@ -189,7 +254,7 @@ class TestDataFrameReader:
 
         # Create reader with DataFrame and options
         options = Options.default()
-        df_reader = reader(dataframe=df, options=options)
+        df_reader = file_dataframe_reader(df, options=options)
 
         # Process rows - should skip failing rows (row2 and row3)
         temp_dirs = []
@@ -213,22 +278,3 @@ class TestDataFrameReader:
 
         assert "Failed to process row row3" in caplog.text
         assert "missing-file.txt" in caplog.text
-
-    def test_mutual_exclusivity(self):
-        """Test that row and dataframe arguments are mutually exclusive."""
-        test_data_dir = Path(__file__).parent / "data"
-
-        # Try to pass both row and dataframe
-        row_dict = {"file.txt": str(test_data_dir / "test_image.txt")}
-        df = pd.DataFrame([{"file.txt": str(test_data_dir / "test_image.txt")}])
-
-        with pytest.raises(
-            ValueError, match="Cannot specify both 'row' and 'dataframe'"
-        ):
-            reader(row=row_dict, dataframe=df)
-
-        # Try to pass neither
-        with pytest.raises(
-            ValueError, match="Must specify either 'row' or 'dataframe'"
-        ):
-            reader()

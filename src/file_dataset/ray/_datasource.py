@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 import ray.data
 from ray.data.block import BlockMetadata
 
-from file_dataset._reader import reader
+from file_dataset._reader import file_dataframe_reader
 from file_dataset.file_dataframe import get_file_columns
 from file_dataset.options import Options
 
@@ -73,7 +73,7 @@ class FileDataFrameAsBlobDatasource(ray.data.Datasource):
                 return 0
 
             # Create reader for size estimation
-            file_reader = reader(dataframe=sample_df, options=self.options)
+            file_reader = file_dataframe_reader(sample_df, options=self.options)
             size_table = file_reader.into_size_table()
 
             # Sum all file sizes across rows and columns for the sample
@@ -160,7 +160,7 @@ class FileDataFrameAsBlobDatasource(ray.data.Datasource):
             Exception: If batch processing fails entirely
         """
         # Create reader for this batch
-        file_reader = reader(dataframe=batch_df, options=self.options)
+        file_reader = file_dataframe_reader(batch_df, options=self.options)
 
         # Convert to blob table (into_blob_table handles partial failures)
         table = file_reader.into_blob_table()

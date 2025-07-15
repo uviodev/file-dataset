@@ -8,7 +8,7 @@ except (ImportError, PackageNotFoundError):
     __version__ = "unknown"
 
 # Export core functionality
-from ._reader import reader
+from ._reader import file_dataframe_reader, row_reader
 from ._writer import write_files
 from .exceptions import FileDatasetError
 from .options import Options
@@ -19,6 +19,7 @@ __all__ = [
     "Options",
     "Pipeline",
     "__version__",
-    "reader",
+    "file_dataframe_reader",
+    "row_reader",
     "write_files",
 ]
