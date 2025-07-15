@@ -1,7 +1,6 @@
 """Core file dataset operations."""
 
 import logging
-import re
 import shutil
 import tempfile
 from collections.abc import Generator
@@ -13,35 +12,9 @@ import pyarrow as pa
 
 from .exceptions import FileDatasetError
 from .options import Options
+from .s3_utils import is_s3_url, parse_s3_url
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_s3_url(url: str) -> tuple[str, str] | None:
-    """Parse S3 URL into bucket and key.
-
-    Args:
-        url: URL to parse
-
-    Returns:
-        Tuple of (bucket, key) if valid S3 URL, None otherwise
-    """
-    match = re.match(r"^s3://([^/]+)/?(.*)$", url)
-    if match:
-        return match.group(1), match.group(2)
-    return None
-
-
-def _is_s3_url(path: str | Path) -> bool:
-    """Check if path is an S3 URL.
-
-    Args:
-        path: Path to check
-
-    Returns:
-        True if path starts with s3://, False otherwise
-    """
-    return str(path).startswith("s3://")
 
 
 class Reader:
@@ -70,7 +43,7 @@ class Reader:
             Error message if validation fails, None if successful
         """
         # Validate S3 URL format
-        parsed = _parse_s3_url(source_str)
+        parsed = parse_s3_url(source_str)
         if not parsed:
             return f"Invalid S3 URL format: {source_str}"
 
@@ -108,7 +81,7 @@ class Reader:
         for filename, source_path in self.files_dict.items():
             source_str = str(source_path)
 
-            if _is_s3_url(source_str):
+            if is_s3_url(source_str):
                 has_s3_files = True
                 error = self._validate_s3_file(filename, source_str)
                 if error:
@@ -155,9 +128,9 @@ class Reader:
                 dest = temp_dir / filename
 
                 try:
-                    if _is_s3_url(source_str):
+                    if is_s3_url(source_str):
                         # Download from S3
-                        bucket, key = _parse_s3_url(source_str)
+                        bucket, key = parse_s3_url(source_str)
                         self.options.s3_client.download_file(bucket, key, str(dest))
                     else:
                         # Local file copy
@@ -361,9 +334,9 @@ def _write_row_files(
         raise FileDatasetError(file_errors, "Cannot write files to destination")
 
     # Check if destination is S3
-    if _is_s3_url(str(into_path)):
+    if is_s3_url(str(into_path)):
         # S3 path handling
-        bucket, prefix = _parse_s3_url(str(into_path))
+        bucket, prefix = parse_s3_url(str(into_path))
         s3_key_prefix = f"{prefix}/{id}" if prefix else id
         return _upload_files_to_s3(row, bucket, s3_key_prefix, options)
     # Local path handling
@@ -500,12 +473,12 @@ def write_files(
         raise ValueError(msg)
 
     # Check if S3 path requires options
-    if _is_s3_url(str(into_path)):
+    if is_s3_url(str(into_path)):
         if options is None:
             msg = "Options required for S3 paths"
             raise ValueError(msg)
         # Validate S3 URL format
-        parsed = _parse_s3_url(str(into_path))
+        parsed = parse_s3_url(str(into_path))
         if not parsed or not parsed[0]:  # Check for empty bucket name
             msg = f"Invalid S3 URL format: {into_path}"
             raise ValueError(msg)
@@ -598,12 +571,12 @@ class FileDataFrameReader:
             ValueError: If S3 URL is invalid or options missing
             Exception: For other errors accessing file
         """
-        if _is_s3_url(file_path):
+        if is_s3_url(file_path):
             if self.options is None:
                 msg = "No S3 options"
                 raise ValueError(msg)
 
-            bucket, key = _parse_s3_url(file_path)
+            bucket, key = parse_s3_url(file_path)
             if not bucket or not key:
                 msg = "Invalid S3 URL"
                 raise ValueError(msg)
@@ -750,12 +723,12 @@ class FileDataFrameReader:
             ValueError: If S3 URL is invalid or options missing
             Exception: For other errors accessing file
         """
-        if _is_s3_url(file_path):
+        if is_s3_url(file_path):
             if self.options is None:
                 msg = "No S3 options"
                 raise ValueError(msg)
 
-            bucket, key = _parse_s3_url(file_path)
+            bucket, key = parse_s3_url(file_path)
             if not bucket or not key:
                 msg = "Invalid S3 URL"
                 raise ValueError(msg)
