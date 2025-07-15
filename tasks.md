@@ -3,11 +3,112 @@ High level goal is to optimize read/write parallelism when there are multiple fi
 We are going to implement Local Parallelism.
 Boto3 S3Transfer already has its own threadpool to copy data, so the main goal is to be able to initiate several transfers in parallel.
 
-Tasks
-1. Create a new library, `_core_file.py`. This library defines an interface to copy data, `do_copy(copies: list[str | Path, str | Path], s3_options: S3Options)`. Given a list of (src, dest) pairs and S3Options, this  validates each copy (ensure src exists, ensure unique destinations, and if s3 is used then s3 options must not be None) then executes each copy sequentially. There needs to be also some low-level function, `_do_single_copy(src, dst, s3_options: S3Options)` that delegates to either shutil or the `s3_options.s3_client`. Refactor existing logic in the writer (write_files) and reader (into_temp_dir) to delegate to this new _core_file.py `do_copy` function.
-2. To `_core_file.py` add the capability to get file sizes `read_file_sizes(files: Mapping[str, str | Path]) -> Mapping[str, int]` as well as the the file content `read_file_contents(files: Mapping[str, str | Path]) -> Mapping[str, bytes]`. Under the hood, these will call into two corresponding low-level functions, `_read_file_size(str | Path, s3_options: S3Options) -> int` and `_read_file_contents(str|Path, s3_options: S3Options) -> bytes`. Refactor `into_size_table()` and `into_blob_table()` to use the new top-level APIs that operate on mappings.
-3. Refactor boto3 s3 API calls in `_core_file.py` to use S3Transfer methods (upload_file/upload_fileobj instead of put_object, download_file/download_fileobj). (HeadObject is stil OK for existence checks and size checks). Ensure `s3_options.transfer_config` is passed to all s3-transfer compatible method calls on the s3 client.
-4. Parallelize `_core_file.py` operations. Each exposed function `do_copy`, `read_file_sizes` and `read_file_contents` will execute in parallel. Notes: Introduce a `local_parallelism` parameter to S3Options. S3Options will now have a lazy ThreadPoolExecutor is created and reused, similar to how the s3client is created/used. The ThreadPoolExecutor will be cleaned up when the S3Options are deleted and it will NOT be used in a context manager so that it is reused. When local_parallelism is configured, `_core_file.py` will use the S3Options ThreadPoolExecutor to implement parallel calls
+## Task 1: Create Core File Operations Library
+
+### Summary
+Create a new library `_core_file.py` that centralizes all file operations (copy, read) with support for both local and S3 paths. This will provide a unified interface for file operations across the codebase.
+
+### Implementation Notes
+- Create `do_copy(copies: list[tuple[str | Path, str | Path]], s3_options: S3Options)` function
+  - Validates each copy operation (source exists, destinations are unique)
+  - Ensures s3_options is not None when S3 paths are involved
+  - Executes copies sequentially (for now)
+- Create `_do_single_copy(src: str | Path, dst: str | Path, s3_options: S3Options)` helper
+  - Delegates to shutil.copy2() for local-to-local copies
+  - Uses s3_options.s3_client for S3 operations
+  - Handles all combinations: local→local, local→S3, S3→local, S3→S3
+- Refactor existing code:
+  - `write_files()` in writer module to use `do_copy()`
+  - `into_temp_dir()` in reader module to use `do_copy()`
+
+### Testing (High Level)
+- Test all copy combinations (local→local, local→S3, S3→local, S3→S3)
+- Test validation: non-existent sources, duplicate destinations
+- Test error handling: permission errors, network failures
+- Mock S3 operations using moto
+- Verify that refactored writer and reader still work correctly
+
+## Task 2: Add File Size and Content Reading APIs
+
+### Summary
+Extend `_core_file.py` with functions to read file sizes and contents efficiently for both local and S3 files. These will support batch operations on multiple files.
+
+### Implementation Notes
+- Create high-level APIs:
+  - `read_file_sizes(files: Mapping[str, str | Path], s3_options: S3Options) -> Mapping[str, int]`
+  - `read_file_contents(files: Mapping[str, str | Path], s3_options: S3Options) -> Mapping[str, bytes]`
+- Create low-level helpers:
+  - `_read_file_size(path: str | Path, s3_options: S3Options) -> int`
+    - Use os.path.getsize() for local files
+    - Use HeadObject for S3 files
+  - `_read_file_contents(path: str | Path, s3_options: S3Options) -> bytes`
+    - Use open/read for local files
+    - Use GetObject for S3 files
+- Refactor existing code:
+  - `into_size_table()` to use `read_file_sizes()`
+  - `into_blob_table()` to use `read_file_contents()`
+
+### Testing (High Level)
+- Test reading sizes/contents from local and S3 files
+- Test batch operations with mixed local/S3 paths
+- Test error cases: missing files, access denied
+- Verify memory efficiency with large files
+- Test that refactored table functions maintain compatibility
+
+## Task 3: Migrate to S3Transfer API
+
+### Summary
+Replace low-level boto3 S3 API calls with S3Transfer methods for better performance and configuration options. S3Transfer provides built-in retry logic, multipart uploads, and bandwidth throttling.
+
+### Implementation Notes
+- Replace in `_core_file.py`:
+  - `put_object()` → `upload_file()` or `upload_fileobj()`
+  - `get_object()` → `download_file()` or `download_fileobj()`
+  - Keep `head_object()` for existence/size checks
+- Ensure `s3_options.transfer_config` is passed to all S3Transfer calls
+- Handle transfer configuration:
+  - Multipart threshold and chunk size
+  - Max concurrency for individual transfers
+  - Bandwidth limits if configured
+- Update error handling for S3Transfer-specific exceptions
+
+### Testing (High Level)
+- Test large file uploads trigger multipart behavior
+- Test transfer config options are respected
+- Test retry behavior on transient failures
+- Compare performance with original implementation
+- Verify backwards compatibility is maintained
+
+## Task 4: Implement Parallel Operations
+
+### Summary
+Add parallelism to all batch operations in `_core_file.py` using a ThreadPoolExecutor. This will significantly improve performance when working with multiple files.
+
+### Implementation Notes
+- Extend S3Options:
+  - Add `local_parallelism: int | None` parameter (default: None)
+  - Add lazy `_executor` property that creates ThreadPoolExecutor on first use
+  - Implement `__del__` to clean up executor (no context manager)
+  - Executor is reused across operations for efficiency
+- Parallelize operations:
+  - `do_copy()`: Submit each copy to executor, wait for all
+  - `read_file_sizes()`: Submit each size read to executor
+  - `read_file_contents()`: Submit each content read to executor
+- Error handling:
+  - Collect exceptions from parallel operations
+  - Return partial results where appropriate
+  - Provide clear error reporting for failed operations
+- Thread safety:
+  - Ensure S3 client creation is thread-safe
+  - Handle concurrent access to shared resources
+
+### Testing (High Level)
+- Test parallel operations are faster than sequential
+- Test with various parallelism levels (1, 4, 16, None)
+- Test error handling with partial failures
+- Test thread safety with concurrent operations
+- Test executor cleanup on S3Options deletion
+- Verify no resource leaks with repeated operations
 
 
 ## Implementation Notes
