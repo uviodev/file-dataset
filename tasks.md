@@ -112,7 +112,7 @@ Remove kwargs for row= and dataframe= from reader(). Make FileRowReader and File
 
 
 ## Task 7: Simplify write_files API with Type-Based Detection
-**Status:** Not Started
+**Status:** Done
 **Priority:** High
 **Dependencies:** (Split Reader API)
 

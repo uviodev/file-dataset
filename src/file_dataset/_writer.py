@@ -1,5 +1,6 @@
 """Writer functionality for file datasets."""
 
+import collections.abc
 import logging
 import shutil
 from pathlib import Path
@@ -133,12 +134,15 @@ def _write_row_files(
     Raises:
         FileDatasetError: If any required files cannot be written
     """
+    # Filter out the 'id' key if present (it's metadata, not a file)
+    file_row = {k: v for k, v in row.items() if k != "id"}
+
     # Validate inputs
-    if not row:
+    if not file_row:
         return {}
 
     # Validate all non-None source files exist before starting
-    file_errors = _validate_source_files(row)
+    file_errors = _validate_source_files(file_row)
     if file_errors:
         raise FileDatasetError(file_errors, "Cannot write files to destination")
 
@@ -147,7 +151,7 @@ def _write_row_files(
         # S3 path handling
         bucket, prefix = parse_s3_url(str(into_path))
         s3_key_prefix = f"{prefix}/{id}" if prefix else id
-        return _upload_files_to_s3(row, bucket, s3_key_prefix, options)
+        return _upload_files_to_s3(file_row, bucket, s3_key_prefix, options)
     # Local path handling
     dest_base = Path(into_path)
     dest_dir = dest_base / id
@@ -162,7 +166,7 @@ def _write_row_files(
         ) from e
 
     # Copy files to destination
-    result, copy_errors = _copy_files_to_destination(row, dest_dir)
+    result, copy_errors = _copy_files_to_destination(file_row, dest_dir)
 
     # If any copies failed, raise error
     if copy_errors:
@@ -247,40 +251,32 @@ def _write_dataframe_files(
 
 
 def write_files(
-    row: dict[str, str | Path | None] | None = None,
+    data: dict[str, str | Path | None] | pd.DataFrame,
     *,
     into_path: str | Path,
     id: str | None = None,  # noqa: A002
-    dataframe: pd.DataFrame | None = None,
     options: Options | None = None,
 ) -> dict[str, Path | None] | pd.DataFrame:
     """Write files to destination directory with ID-based organization.
 
     Args:
-        row: Dictionary mapping filenames to their source paths or None
+        data: Dictionary mapping filenames to their source paths (for single row)
+              or DataFrame where each row contains files to write
         into_path: Base destination directory or S3 path (keyword-only)
-        id: Unique identifier for this set of files (keyword-only, required with row)
-        dataframe: DataFrame where each row contains files to write (keyword-only)
+        id: Unique identifier for this set of files (required for dict,
+            forbidden for DataFrame)
         options: Options instance for S3 operations (keyword-only, required for S3)
 
     Returns:
-        Dictionary mapping filenames to destination paths (when row is provided)
-        or DataFrame with id column and file columns (when dataframe is provided)
+        Dictionary mapping filenames to destination paths (when dict is provided)
+        or DataFrame with id column and file columns (when DataFrame is provided)
 
     Raises:
         FileDatasetError: If any required files cannot be written
-        ValueError: If both row and dataframe are provided, or if neither is provided
+        ValueError: If id is missing for dict input or provided for DataFrame input
         ValueError: If S3 path is provided without options
+        TypeError: If data is neither dict nor DataFrame
     """
-    # Check mutual exclusivity
-    if row is not None and dataframe is not None:
-        msg = "Cannot specify both 'row' and 'dataframe' arguments"
-        raise ValueError(msg)
-
-    if row is None and dataframe is None:
-        msg = "Must specify either 'row' or 'dataframe' argument"
-        raise ValueError(msg)
-
     # Initialize default options if S3 path is used
     if is_s3_url(str(into_path)):
         if options is None:
@@ -291,12 +287,24 @@ def write_files(
             msg = f"Invalid S3 URL format: {into_path}"
             raise ValueError(msg)
 
-    # Handle single row case
-    if row is not None:
-        if id is None:
-            msg = "Must specify 'id' when using 'row' argument"
+    # Type-based dispatch
+    if isinstance(data, pd.DataFrame):
+        # DataFrame case - id should not be provided
+        if id is not None:
+            msg = (
+                "Cannot specify 'id' when using DataFrame - "
+                "DataFrame must have 'id' column"
+            )
             raise ValueError(msg)
-        return _write_row_files(row, into_path, id, options)
+        return _write_dataframe_files(data, into_path, options)
 
-    # Handle DataFrame case
-    return _write_dataframe_files(dataframe, into_path, options)
+    if isinstance(data, collections.abc.Mapping):
+        # Dict/Mapping case - id is required
+        if id is None and (id := data.get("id")) is None:  # noqa: A001
+            msg = "Must specify 'id' when using dict/mapping data"
+            raise ValueError(msg)
+        return _write_row_files(data, into_path, id, options)
+
+    # Neither DataFrame nor Mapping
+    msg = f"Data must be either a dict/mapping or DataFrame, got {type(data).__name__}"
+    raise TypeError(msg)

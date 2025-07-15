@@ -99,7 +99,7 @@ class Pipeline:
 
                     # Write results using write_files
                     write_result = write_files(
-                        row=result_files,
+                        result_files,
                         into_path=self.into_path,
                         id=row_id,
                         options=self.options,

@@ -15,7 +15,7 @@ def test_write_files_s3_without_options_uses_defaults():
     # We expect it to fail later due to invalid file, but not due to missing options
     with pytest.raises(FileDatasetError):  # Will fail due to missing source file
         file_dataset.write_files(
-            row={"test.txt": "nonexistent_file.txt"},
+            {"test.txt": "nonexistent_file.txt"},
             into_path="s3://test-bucket/folder",
             id="test-id",
         )

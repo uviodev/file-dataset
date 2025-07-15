@@ -33,7 +33,7 @@ class TestWriteS3:
         # Write to S3
         s3_path = f"s3://{self.bucket_name}/test-prefix"
         result = write_files(
-            row={"file.txt": str(source_file)},
+            {"file.txt": str(source_file)},
             into_path=s3_path,
             id="test-id",
             options=self.options,
@@ -62,7 +62,7 @@ class TestWriteS3:
         # Write to S3
         s3_path = f"s3://{self.bucket_name}/multi"
         result = write_files(
-            row={"file1.txt": str(file1), "file2.txt": str(file2)},
+            {"file1.txt": str(file1), "file2.txt": str(file2)},
             into_path=s3_path,
             id="multi-id",
             options=self.options,
@@ -96,7 +96,7 @@ class TestWriteS3:
         # Write to S3 with None value
         s3_path = f"s3://{self.bucket_name}/optional"
         result = write_files(
-            row={
+            {
                 "file1.txt": str(file1),
                 "file2.txt": None,  # Optional file
             },
@@ -131,7 +131,7 @@ class TestWriteS3:
         s3_path = f"s3://{self.bucket_name}/test"
         # This should now succeed and use default options
         result = write_files(
-            row={"file.txt": str(source_file)},
+            {"file.txt": str(source_file)},
             into_path=s3_path,
             id="test-id",
             # No options provided - will use defaults
@@ -156,7 +156,7 @@ class TestWriteS3:
         for invalid_url in invalid_s3_urls:
             with pytest.raises(ValueError, match="Invalid S3 URL"):
                 write_files(
-                    row={"file.txt": str(source_file)},
+                    {"file.txt": str(source_file)},
                     into_path=invalid_url,
                     id="test-id",
                     options=self.options,
@@ -177,7 +177,7 @@ class TestWriteS3:
         s3_path = f"s3://{self.bucket_name}/error"
         with pytest.raises(FileDatasetError) as exc_info:
             write_files(
-                row={"file.txt": str(source_file)},
+                {"file.txt": str(source_file)},
                 into_path=s3_path,
                 id="error-id",
                 options=self.options,
@@ -212,7 +212,7 @@ class TestWriteS3:
 
         # Write to S3
         s3_path = f"s3://{self.bucket_name}/dataframe"
-        result_df = write_files(dataframe=df, into_path=s3_path, options=self.options)
+        result_df = write_files(df, into_path=s3_path, options=self.options)
 
         # Verify result DataFrame
         assert len(result_df) == 2

@@ -32,7 +32,7 @@ def test_write_files_dataframe_all_successful(tmp_path):
 
     # Write files
     dest_dir = tmp_path / "dest"
-    result_df = write_files(dataframe=df, into_path=dest_dir)
+    result_df = write_files(df, into_path=dest_dir)
 
     # Verify result is a DataFrame
     assert isinstance(result_df, pd.DataFrame)
@@ -88,7 +88,7 @@ def test_write_files_dataframe_partial_failures(tmp_path, caplog):
     # Write files with logging enabled
     dest_dir = tmp_path / "dest"
     with caplog.at_level(logging.WARNING):
-        result_df = write_files(dataframe=df, into_path=dest_dir)
+        result_df = write_files(df, into_path=dest_dir)
 
     # Verify result DataFrame
     assert isinstance(result_df, pd.DataFrame)
@@ -121,7 +121,7 @@ def test_write_files_dataframe_all_failed(tmp_path):
     # Write files - should raise error when all fail
     dest_dir = tmp_path / "dest"
     with pytest.raises(FileDatasetError) as exc_info:
-        write_files(dataframe=df, into_path=dest_dir)
+        write_files(df, into_path=dest_dir)
 
     assert "All rows failed" in str(exc_info.value)
     assert exc_info.value.file_errors["all_rows"] == "All rows failed to write"
@@ -140,7 +140,7 @@ def test_write_files_dataframe_no_id_column(tmp_path):
     # Should raise ValueError
     dest_dir = tmp_path / "dest"
     with pytest.raises(ValueError, match="DataFrame must have an 'id' column"):
-        write_files(dataframe=df, into_path=dest_dir)
+        write_files(df, into_path=dest_dir)
 
 
 def test_write_files_dataframe_empty(tmp_path):
@@ -150,7 +150,7 @@ def test_write_files_dataframe_empty(tmp_path):
 
     # Write files
     dest_dir = tmp_path / "dest"
-    result_df = write_files(dataframe=df, into_path=dest_dir)
+    result_df = write_files(df, into_path=dest_dir)
 
     # Verify result is empty DataFrame with id column
     assert isinstance(result_df, pd.DataFrame)
@@ -179,7 +179,7 @@ def test_write_files_dataframe_with_none_values(tmp_path):
 
     # Write files
     dest_dir = tmp_path / "dest"
-    result_df = write_files(dataframe=df, into_path=dest_dir)
+    result_df = write_files(df, into_path=dest_dir)
 
     # Verify result DataFrame
     assert len(result_df) == 2
@@ -196,23 +196,51 @@ def test_write_files_dataframe_with_none_values(tmp_path):
     assert not (dest_dir / "row2" / "file_c").exists()  # None value
 
 
-def test_write_files_mutual_exclusivity(tmp_path):
-    """Test that row and dataframe arguments are mutually exclusive."""
-    # Both provided
-    with pytest.raises(ValueError, match="Cannot specify both 'row' and 'dataframe'"):
-        write_files(
-            row={"file": "/some/file.txt"},
-            dataframe=pd.DataFrame({"id": ["test"]}),
-            into_path=tmp_path,
-            id="test",
-        )
+def test_write_files_type_validation(tmp_path):
+    """Test type validation for data parameter."""
+    # Invalid type provided
+    with pytest.raises(
+        TypeError, match="Data must be either a dict/mapping or DataFrame"
+    ):
+        write_files("invalid_type", into_path=tmp_path, id="test")
 
-    # Neither provided
-    with pytest.raises(ValueError, match="Must specify either 'row' or 'dataframe'"):
-        write_files(into_path=tmp_path)
+    # DataFrame with id parameter should be forbidden
+    with pytest.raises(ValueError, match="Cannot specify 'id' when using DataFrame"):
+        write_files(pd.DataFrame({"id": ["test"]}), into_path=tmp_path, id="test")
 
 
-def test_write_files_row_requires_id(tmp_path):
-    """Test that id is required when using row argument."""
-    with pytest.raises(ValueError, match="Must specify 'id' when using 'row' argument"):
-        write_files(row={"file": "/some/file.txt"}, into_path=tmp_path)
+def test_write_files_dict_requires_id(tmp_path):
+    """Test that id is required when using dict/mapping data."""
+    with pytest.raises(
+        ValueError, match="Must specify 'id' when using dict/mapping data"
+    ):
+        write_files({"file": "/some/file.txt"}, into_path=tmp_path)
+
+
+def test_write_files_dict_with_id_in_data(tmp_path):
+    """Test that id can be provided within the data dict."""
+    # Create test file
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    (source_dir / "test.txt").write_text("test content")
+
+    # Use id from data dict
+    result = write_files(
+        {"id": "test-id", "file.txt": str(source_dir / "test.txt")},
+        into_path=tmp_path / "dest",
+    )
+
+    # Verify result
+    assert "file.txt" in result
+    assert "id" not in result  # id should not be in result (it's metadata)
+    assert (tmp_path / "dest" / "test-id" / "file.txt").exists()
+
+    # Explicit id parameter should override data dict id
+    write_files(
+        {"id": "wrong-id", "file.txt": str(source_dir / "test.txt")},
+        into_path=tmp_path / "dest2",
+        id="correct-id",
+    )
+
+    assert (tmp_path / "dest2" / "correct-id" / "file.txt").exists()
+    assert not (tmp_path / "dest2" / "wrong-id").exists()

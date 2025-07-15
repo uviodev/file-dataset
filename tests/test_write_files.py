@@ -22,7 +22,7 @@ class TestWriteFiles:
         files_dict = {"image.txt": test_file}
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            result = write_files(row=files_dict, into_path=temp_dir, id="test_001")
+            result = write_files(files_dict, into_path=temp_dir, id="test_001")
 
             # Check result format
             assert len(result) == 1
@@ -56,7 +56,7 @@ class TestWriteFiles:
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            result = write_files(row=files_dict, into_path=temp_dir, id="multi_001")
+            result = write_files(files_dict, into_path=temp_dir, id="multi_001")
 
             # Check result format
             assert len(result) == self.EXPECTED_MULTIPLE_FILES_COUNT
@@ -82,7 +82,7 @@ class TestWriteFiles:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             with pytest.raises(FileDatasetError) as exc_info:
-                write_files(row=files_dict, into_path=temp_dir, id="error_001")
+                write_files(files_dict, into_path=temp_dir, id="error_001")
 
             # Check error contains information about missing file
             error = exc_info.value
@@ -103,7 +103,7 @@ class TestWriteFiles:
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            result = write_files(row=files_dict, into_path=temp_dir, id="optional_001")
+            result = write_files(files_dict, into_path=temp_dir, id="optional_001")
 
             # Check result format - None values should be preserved
             assert len(result) == self.EXPECTED_OPTIONAL_FILES_COUNT
@@ -124,7 +124,7 @@ class TestWriteFiles:
         files_dict = {}
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            result = write_files(row=files_dict, into_path=temp_dir, id="empty_001")
+            result = write_files(files_dict, into_path=temp_dir, id="empty_001")
 
             # Should return empty dict
             assert result == {}
@@ -141,7 +141,7 @@ class TestWriteFiles:
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            result = write_files(row=files_dict, into_path=temp_dir, id="all_none_001")
+            result = write_files(files_dict, into_path=temp_dir, id="all_none_001")
 
             # Should return dict with None values
             assert len(result) == self.EXPECTED_ALL_NONE_COUNT
@@ -164,7 +164,7 @@ class TestWriteFiles:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             with pytest.raises(FileDatasetError) as exc_info:
-                write_files(row=files_dict, into_path=temp_dir, id="atomic_001")
+                write_files(files_dict, into_path=temp_dir, id="atomic_001")
 
             # Check error mentions the missing file
             error = exc_info.value
@@ -182,7 +182,7 @@ class TestWriteFiles:
         with tempfile.TemporaryDirectory() as temp_dir:
             nested_path = Path(temp_dir) / "level1" / "level2" / "level3"
 
-            result = write_files(row=files_dict, into_path=nested_path, id="nested_001")
+            result = write_files(files_dict, into_path=nested_path, id="nested_001")
 
             # Check nested directory structure was created
             expected_dir = nested_path / "nested_001"
