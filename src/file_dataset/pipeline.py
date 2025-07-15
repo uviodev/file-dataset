@@ -56,11 +56,14 @@ class Pipeline:
         Args:
             fn: User function that takes a temp directory and returns file mapping
             into_path: Base destination directory or S3 path for outputs (keyword-only)
-            options: S3Options instance for S3 operations (keyword-only)
+            options: S3Options instance for S3 operations (keyword-only).
+                If None, defaults to S3Options.default() to ensure Pipeline
+                can process many DataFrames without failing on S3 operations.
         """
         self.fn = fn
         self.into_path = into_path
-        self.options = options
+        # Ensure options is never None to support processing many DataFrames
+        self.options = options if options is not None else S3Options.default()
 
     def __call__(self, dataframe: pd.DataFrame) -> pd.DataFrame:
         """Process DataFrame through the pipeline.

@@ -164,8 +164,36 @@ class TestPipeline:
 
         # Verify the unpickled pipeline has the same attributes
         assert unpickled_pipeline.into_path == pipeline.into_path
-        assert unpickled_pipeline.options == pipeline.options
+        # Both should have S3Options instances (not None)
+        assert unpickled_pipeline.options is not None
+        assert pipeline.options is not None
+        # Options should have equivalent session configuration
+        assert (
+            unpickled_pipeline.options._session_kwargs
+            == pipeline.options._session_kwargs
+        )
         assert callable(unpickled_pipeline.fn)
+
+    def test_pipeline_options_never_none(self, tmp_path):
+        """Test that Pipeline.options is never None."""
+        from file_dataset.s3_options import S3Options
+
+        # Test with options=None
+        pipeline1 = Pipeline(pickle_test_function, into_path=tmp_path, options=None)
+        assert pipeline1.options is not None
+        assert isinstance(pipeline1.options, S3Options)
+
+        # Test with no options argument
+        pipeline2 = Pipeline(pickle_test_function, into_path=tmp_path)
+        assert pipeline2.options is not None
+        assert isinstance(pipeline2.options, S3Options)
+
+        # Test with explicit options
+        custom_options = S3Options.default()
+        pipeline3 = Pipeline(
+            pickle_test_function, into_path=tmp_path, options=custom_options
+        )
+        assert pipeline3.options is custom_options
 
     def test_all_rows_fail(self, tmp_path):
         """Test that all rows failing raises FileDatasetError."""
