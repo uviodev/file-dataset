@@ -81,7 +81,7 @@ Replace low-level boto3 S3 API calls with S3Transfer methods for better performa
 - Verify backwards compatibility is maintained
 
 
-## Task 4: Ensure all s3_client operations are performed in `_core_file.py`
+## Task 4: Ensure all s3_client operations are performed in `_core_file.py` ✓
 ### Summary
 Move `validate_files` from the RowReader to `_core_file.py` with functions. This centralizes all S3 client operations in one module for better maintainability and consistency.
 

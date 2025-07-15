@@ -232,3 +232,219 @@ class TestCoreFile:
 
         assert contents == {"f1": content1, "f2": content2}
         assert errors == {}
+
+
+class TestFileValidation:
+    """Test file validation functions."""
+
+    def test_validate_file_exists_local_file(self, tmp_path):
+        """Test _validate_file_exists for existing local file."""
+        from file_dataset._core_file import _validate_file_exists
+
+        # Create a test file
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("content")
+
+        # Test file exists - should return None (no error)
+        assert _validate_file_exists(str(test_file), s3_options=None) is None
+
+    def test_validate_file_exists_local_missing(self, tmp_path):
+        """Test _validate_file_exists for missing local file."""
+        from file_dataset._core_file import _validate_file_exists
+
+        # Test non-existent file
+        missing_file = tmp_path / "missing.txt"
+        error = _validate_file_exists(str(missing_file), s3_options=None)
+        assert error is not None
+        assert "not found" in error
+
+    def test_validate_file_exists_local_directory(self, tmp_path):
+        """Test _validate_file_exists for directory (should return error)."""
+        from file_dataset._core_file import _validate_file_exists
+
+        # Create a directory
+        test_dir = tmp_path / "testdir"
+        test_dir.mkdir()
+
+        # Directory should return error
+        error = _validate_file_exists(str(test_dir), s3_options=None)
+        assert error is not None
+        assert "not a file" in error
+
+    @mock_aws
+    def test_validate_file_exists_s3_file(self):
+        """Test _validate_file_exists for existing S3 file."""
+        from file_dataset._core_file import _validate_file_exists
+
+        # Set up mock S3
+        s3 = boto3.client("s3", region_name="us-east-1")
+        bucket = "test-bucket"
+        s3.create_bucket(Bucket=bucket)
+        s3.put_object(Bucket=bucket, Key="test.txt", Body=b"content")
+
+        # Test file exists - should return None (no error)
+        s3_options = S3Options.default()
+        assert _validate_file_exists(f"s3://{bucket}/test.txt", s3_options) is None
+
+    @mock_aws
+    def test_validate_file_exists_s3_missing(self):
+        """Test _validate_file_exists for missing S3 file."""
+        from file_dataset._core_file import _validate_file_exists
+
+        # Set up mock S3
+        s3 = boto3.client("s3", region_name="us-east-1")
+        bucket = "test-bucket"
+        s3.create_bucket(Bucket=bucket)
+
+        # Test missing file
+        s3_options = S3Options.default()
+        error = _validate_file_exists(f"s3://{bucket}/missing.txt", s3_options)
+        assert error is not None
+        assert "not found" in error
+
+    def test_validate_file_exists_s3_no_options(self):
+        """Test _validate_file_exists for S3 file without S3Options."""
+        from file_dataset._core_file import _validate_file_exists
+
+        # S3 file without options should return error
+        error = _validate_file_exists("s3://bucket/file.txt", s3_options=None)
+        assert error is not None
+        assert "S3Options required" in error
+
+    def test_validate_s3_path_format_valid(self):
+        """Test _validate_s3_path_format with valid S3 URL."""
+        from file_dataset._core_file import _validate_s3_path_format
+
+        s3_options = S3Options.default()
+        # Valid S3 path with options
+        assert _validate_s3_path_format("s3://bucket/file.txt", s3_options) is None
+
+    def test_validate_s3_path_format_invalid_url(self):
+        """Test _validate_s3_path_format with invalid S3 URL."""
+        from file_dataset._core_file import _validate_s3_path_format
+
+        s3_options = S3Options.default()
+        # Invalid S3 URL
+        error = _validate_s3_path_format("s3://", s3_options)
+        assert error is not None
+        assert "Invalid S3 URL" in error
+
+    def test_validate_s3_path_format_no_key(self):
+        """Test _validate_s3_path_format with bucket-only URL."""
+        from file_dataset._core_file import _validate_s3_path_format
+
+        s3_options = S3Options.default()
+        # Bucket-only URL should be invalid for file operations
+        error = _validate_s3_path_format("s3://bucket/", s3_options)
+        assert error is not None
+        assert "Invalid S3 URL" in error
+
+    def test_validate_s3_path_format_no_options(self):
+        """Test _validate_s3_path_format without S3Options."""
+        from file_dataset._core_file import _validate_s3_path_format
+
+        # S3 path without options
+        error = _validate_s3_path_format("s3://bucket/file.txt", s3_options=None)
+        assert error is not None
+        assert "S3Options required" in error
+
+    def test_validate_s3_path_format_local_path(self):
+        """Test _validate_s3_path_format with local path."""
+        from file_dataset._core_file import _validate_s3_path_format
+
+        # Local paths should return None immediately
+        assert _validate_s3_path_format("/path/to/file.txt", s3_options=None) is None
+        assert _validate_s3_path_format("relative/path.txt", s3_options=None) is None
+
+    def test_validate_each_file_local_files(self, tmp_path):
+        """Test validate_each_file with local files."""
+        from file_dataset._core_file import validate_each_file
+
+        # Create test files
+        file1 = tmp_path / "file1.txt"
+        file1.write_text("content1")
+        file2 = tmp_path / "file2.txt"
+        file2.write_text("content2")
+        missing = tmp_path / "missing.txt"
+
+        files = {
+            "f1": str(file1),
+            "f2": str(file2),
+            "f3": str(missing),
+        }
+
+        # Test with existence checks
+        errors = validate_each_file(files, s3_options=None, do_existence_checks=True)
+        assert "f3" in errors
+        assert "not found" in errors["f3"] or "not exist" in errors["f3"]
+        assert "f1" not in errors
+        assert "f2" not in errors
+
+    def test_validate_each_file_no_existence_checks(self, tmp_path):
+        """Test validate_each_file without existence checks."""
+        from file_dataset._core_file import validate_each_file
+
+        missing = tmp_path / "missing.txt"
+
+        files = {
+            "f1": str(missing),
+            "f2": "s3://bucket/file.txt",  # Invalid without s3_options
+        }
+
+        # Without existence checks, only format validation for S3
+        errors = validate_each_file(files, s3_options=None, do_existence_checks=False)
+        # When S3 files exist without options, we get a special error
+        assert "__s3_options__" in errors
+        assert "S3Options required" in errors["__s3_options__"]
+
+    @mock_aws
+    def test_validate_each_file_s3_files(self):
+        """Test validate_each_file with S3 files."""
+        from file_dataset._core_file import validate_each_file
+
+        # Set up mock S3
+        s3 = boto3.client("s3", region_name="us-east-1")
+        bucket = "test-bucket"
+        s3.create_bucket(Bucket=bucket)
+        s3.put_object(Bucket=bucket, Key="file1.txt", Body=b"content1")
+
+        files = {
+            "f1": f"s3://{bucket}/file1.txt",
+            "f2": f"s3://{bucket}/missing.txt",
+            "f3": "s3://invalid-url",
+        }
+
+        s3_options = S3Options.default()
+        errors = validate_each_file(files, s3_options, do_existence_checks=True)
+
+        # When there's a format error, existence checks don't run
+        assert "f1" not in errors  # No error
+        assert "f2" not in errors  # Existence check didn't run due to f3's format error
+        assert "f3" in errors  # Invalid format
+        assert "Invalid S3 URL" in errors["f3"]
+
+        # Test again without the invalid URL
+        files_valid = {
+            "f1": f"s3://{bucket}/file1.txt",
+            "f2": f"s3://{bucket}/missing.txt",
+        }
+        errors_valid = validate_each_file(
+            files_valid, s3_options, do_existence_checks=True
+        )
+        assert "f1" not in errors_valid  # Exists
+        assert "f2" in errors_valid  # Missing
+        assert "not found" in errors_valid["f2"]
+
+    def test_validate_each_file_missing_s3_options(self):
+        """Test validate_each_file with S3 files but no S3Options."""
+        from file_dataset._core_file import validate_each_file
+
+        files = {
+            "f1": "s3://bucket/file.txt",
+        }
+
+        # Should raise error for S3 files without options
+        errors = validate_each_file(files, s3_options=None, do_existence_checks=True)
+        assert len(errors) == 1
+        assert "__s3_options__" in errors
+        assert "S3Options required" in errors["__s3_options__"]

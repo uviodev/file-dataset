@@ -9,10 +9,15 @@ from pathlib import Path
 import pandas as pd
 import pyarrow as pa
 
-from ._core_file import copy_each_file, read_each_file_contents, read_each_file_size
+from ._core_file import (
+    copy_each_file,
+    read_each_file_contents,
+    read_each_file_size,
+    validate_each_file,
+)
 from .exceptions import FileDatasetError
 from .s3_options import S3Options
-from .s3_utils import is_s3_url, parse_s3_url
+from .s3_utils import is_s3_url
 
 logger = logging.getLogger(__name__)
 
@@ -38,76 +43,6 @@ class FileRowReader:
         else:
             self.options = options
 
-    def _validate_s3_file(self, filename: str, source_str: str) -> str | None:  # noqa: ARG002
-        """Validate a single S3 file.
-
-        Args:
-            filename: The filename being validated
-            source_str: The S3 URL string
-
-        Returns:
-            Error message if validation fails, None if successful
-        """
-        # Validate S3 URL format
-        parsed = parse_s3_url(source_str)
-        if not parsed:
-            return f"Invalid S3 URL format: {source_str}"
-
-        bucket, key = parsed
-        if not key:  # FileRowReader needs a key to read a file
-            return f"Invalid S3 URL format: {source_str}"
-
-        # S3Options should already be initialized in __init__ if needed
-        if self.options is None:
-            return "S3Options required for S3 URLs but not provided"
-
-        # Validate S3 object exists using HEAD request
-        try:
-            self.options.s3_client.head_object(Bucket=bucket, Key=key)
-        except Exception as e:  # noqa: BLE001
-            # Check for 404 error (object not found)
-            if (
-                hasattr(e, "response")
-                and e.response.get("Error", {}).get("Code") == "404"
-            ):
-                return f"S3 object not found: {source_str}"
-            return f"S3 access error: {e}"
-
-        return None
-
-    def _validate_files(self) -> dict[str, str]:
-        """Validate all files exist and are accessible.
-
-        Returns:
-            Dictionary of filename to error message for any validation failures
-        """
-        file_errors: dict[str, str] = {}
-        has_s3_files = False
-
-        for filename, source_path in self.files_dict.items():
-            source_str = str(source_path)
-
-            if is_s3_url(source_str):
-                has_s3_files = True
-                error = self._validate_s3_file(filename, source_str)
-                if error:
-                    file_errors[filename] = error
-            else:
-                # Local file validation
-                source = Path(source_path)
-                if not source.exists():
-                    file_errors[filename] = f"Source file not found: {source}"
-                elif not source.is_file():
-                    file_errors[filename] = f"Source path is not a file: {source}"
-
-        # Check if we have S3 URLs but no options (shouldn't happen with eager init)
-        if has_s3_files and self.options is None and not file_errors:
-            file_errors["__options__"] = (
-                "S3Options required for S3 URLs but not provided"
-            )
-
-        return file_errors
-
     @contextmanager
     def into_temp_dir(self) -> Generator[Path, None, None]:
         """Copy files to temporary directory and yield the directory path.
@@ -119,7 +54,7 @@ class FileRowReader:
             FileDatasetError: If any files cannot be copied
         """
         # Validate all files exist before starting copy operation
-        file_errors = self._validate_files()
+        file_errors = validate_each_file(self.files_dict, self.options)
 
         if file_errors:
             raise FileDatasetError(

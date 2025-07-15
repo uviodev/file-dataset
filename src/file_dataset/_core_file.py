@@ -272,3 +272,126 @@ def read_each_file_contents(
             errors[key] = str(e)
 
     return result, errors
+
+
+def _validate_file_exists(path: str | Path, s3_options: S3Options | None) -> str | None:  # noqa: PLR0911
+    """Validate that a file exists and is accessible.
+
+    Args:
+        path: File path (local or S3)
+        s3_options: S3 options for S3 operations
+
+    Returns:
+        Error message if file doesn't exist or isn't accessible, None if valid
+    """
+    path_str = str(path)
+
+    if is_s3_url(path_str):
+        # S3 file - check using head_object
+        if s3_options is None:
+            return "S3Options required for S3 URLs but not provided"
+
+        bucket, key = parse_s3_url(path_str)
+        if not key:  # Bucket-only path isn't a file
+            return f"Invalid S3 URL format: {path_str}"
+
+        try:
+            s3_options.s3_client.head_object(Bucket=bucket, Key=key)
+        except ClientError as e:
+            # Check for 404 error (object not found)
+            if e.response.get("Error", {}).get("Code") == "404":
+                return f"S3 object not found: {path_str}"
+            # For other errors (permissions, etc.)
+            return f"S3 access error: {e}"
+        except Exception as e:  # noqa: BLE001
+            return f"Error checking S3 file: {e}"
+        else:
+            return None  # File exists
+    else:
+        # Local file
+        path_obj = Path(path_str)
+        if not path_obj.exists():
+            return f"Source file not found: {path_str}"
+        if not path_obj.is_file():
+            return f"Source path is not a file: {path_str}"
+        return None  # File exists and is a file
+
+
+def _validate_s3_path_format(
+    path: str | Path, s3_options: S3Options | None
+) -> str | None:
+    """Validate S3 path format.
+
+    Args:
+        path: File path to validate
+        s3_options: S3 options for S3 operations
+
+    Returns:
+        Error message if invalid, None if valid or not an S3 path
+    """
+    path_str = str(path)
+
+    # Return None immediately for local paths
+    if not is_s3_url(path_str):
+        return None
+
+    # Validate S3 URL format
+    parsed = parse_s3_url(path_str)
+    if not parsed:
+        return f"Invalid S3 URL format: {path_str}"
+
+    bucket, key = parsed
+    if not key:  # FileRowReader needs a key to read a file
+        return f"Invalid S3 URL format: {path_str}"
+
+    # Check S3Options is provided
+    if s3_options is None:
+        return "S3Options required for S3 URLs but not provided"
+
+    return None
+
+
+def validate_each_file(
+    files: Mapping[str, str | Path],
+    s3_options: S3Options | None = None,
+    *,
+    do_existence_checks: bool = True,
+) -> dict[str, str]:
+    """Validate multiple files.
+
+    Args:
+        files: Mapping of identifier to file path
+        s3_options: S3 options for S3 operations
+        do_existence_checks: If True, check if files exist; if False, only validate
+            format
+
+    Returns:
+        Dictionary of errors indexed by file identifier (empty if all valid)
+    """
+    if not files:
+        return {}
+
+    errors: dict[str, str] = {}
+
+    # First check if any S3 files exist and we have no s3_options
+    has_s3_files = any(is_s3_url(str(path)) for path in files.values())
+    if has_s3_files and s3_options is None:
+        errors["__s3_options__"] = "S3Options required for S3 URLs but not provided"
+        return errors
+
+    # First pass: validate S3 path formats
+    for key, path in files.items():
+        path_str = str(path)
+        format_error = _validate_s3_path_format(path_str, s3_options)
+        if format_error:
+            errors[key] = format_error
+
+    # Second pass: existence checks (only if requested and no format errors)
+    if do_existence_checks and not errors:
+        for key, path in files.items():
+            path_str = str(path)
+            exist_error = _validate_file_exists(path_str, s3_options)
+            if exist_error:
+                errors[key] = exist_error
+
+    return errors
