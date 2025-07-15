@@ -86,6 +86,93 @@ Consolidate the concept of a `file_dataframe` into a new file, `file_dataframe.p
 - Regression tests to ensure existing pipeline functionality remains intact
 
 
+## Task 6: Split Reader API for Better Separation of Concerns
+**Status:** Not Started
+**Priority:** High
+
+**Summary:** Split the overloaded reader() function into row_reader() and file_dataframe_reader() with distinct interfaces.
+
+**Description:**
+The current reader() API tries to handle both single row and DataFrame scenarios with kwargs, making it confusing and error-prone. Split into two dedicated functions:
+- `row_reader(row, options=None)` returns FileRowReader with `into_temp_dir()` context manager
+- `file_dataframe_reader(dataframe, options=None)` returns FileDataFrameReader with `into_temp_dirs()` generator
+
+Remove kwargs for row= and dataframe= from reader(). Make FileRowReader and FileDataFrameReader have distinct, focused interfaces. Drop methods on FileRowReader that raise NotImplementedError and simply don't implement them.
+
+**High-Level Test Descriptions:**
+- Update existing tests named test_reader_s3.py and test_reader.py to see if any of them can be updated.
+- Test row_reader() works with single row dictionaries
+- Test file_dataframe_reader() works with DataFrames
+- Test FileRowReader.into_temp_dir() context manager behavior
+- Test FileDataFrameReader.into_temp_dirs() generator behavior
+- Test old reader() function is removed/deprecated properly
+- Test FileRowReader doesn't have DataFrame-specific methods
+- Test clean separation between single-row and DataFrame workflows
+- Test backward compatibility migration path for existing code
+
+
+## Task 7: Simplify write_files API with Type-Based Detection
+**Status:** Not Started
+**Priority:** High
+**Dependencies:** (Split Reader API)
+
+**Summary:** Simplify write_files() API by automatically detecting single row vs DataFrame based on first argument type.
+
+**Description:**
+Currently write_files() has confusing kwargs for row= and dataframe= scenarios. Simplify the API to have a single function that automatically detects the operation type based on the first argument:
+- `write_files(data: DataFrame | Mapping[str, str | Path | None], *, into_path, id=None, options=None)`
+- If `data` is a dict/mapping → single row operation (id required)
+- If `data` is a DataFrame → file dataframe operation (id not allowed, uses DataFrame 'id' column)
+
+Remove the separate kwargs and make the API more intuitive by using type-based dispatch. This creates a cleaner interface while maintaining all existing functionality.
+
+**High-Level Test Descriptions:**
+- Update existing tests named test_writer.py to see if they can be refactored to test the new API.
+- Test write_files() with dict input works as single row operation
+- Test write_files() with DataFrame input works as file dataframe operation
+- Test id parameter is required for dict input and forbidden for DataFrame input
+- Test proper error messages when id parameter is used incorrectly
+- Test type hints properly reflect the union type for the data parameter
+- Test backward compatibility with existing write_files usage patterns
+- Test integration with Pipeline class still works correctly
+- Test both local and S3 destinations work with the unified API
+
+
+## Task 8: Add Parallel File Operations Support
+**Status:** Not Started
+**Priority:** Low
+
+**Summary:** Implement optional parallel processing for file downloads and uploads.
+
+**Description:**
+Add parallel processing capabilities for file operations using ThreadPoolExecutor with configurable worker count. This should be optional and configurable to balance performance with resource usage.
+
+**High-Level Test Descriptions:**
+- Test parallel downloads complete faster than sequential
+- Test parallel uploads maintain data integrity
+- Test worker count limits are respected
+- Test graceful fallback to sequential processing on errors
+- Test resource cleanup when parallel operations complete
+
+
+
+## Task 9: Improve Memory Management for Large Files
+**Status:** Not Started
+**Priority:** High
+**Dependencies:** Task 7 (Progress reporting)
+
+**Summary:** Implement streaming and memory budget controls for processing large files efficiently.
+
+**Description:**
+Currently large files are loaded entirely into memory which can cause OOM errors. Implement chunked/streaming reading for large files and add memory budget parameters to control concurrent file loading. This is critical for production workloads with large image/blob files.
+
+**High-Level Test Descriptions:**
+- Test memory usage stays within configured limits for large files
+- Test streaming file operations work correctly
+- Test concurrent file loading respects memory budget
+- Test performance is maintained with memory management enabled
+- Test graceful degradation when memory limits are hit
+
 
 ## Implementation Notes
 
