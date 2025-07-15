@@ -19,7 +19,7 @@ Move s3-related helper functions like `parse_url` from their current locations i
 - Test import paths to ensure S3 utilities are accessible from expected locations
 
 ## Task 2: Rename Reader Class
-**Status:** Not Started
+**Status:** Done
 **Priority:** Medium
 **Dependencies:** Task 1 (S3 utilities extraction)
 

@@ -172,7 +172,7 @@ def test_dataframe_reader_into_size_table_schema_validation(tmp_path):
 
 
 def test_reader_into_size_table_not_implemented(tmp_path):
-    """Test that single Reader raises NotImplementedError."""
+    """Test that single FileRowReader raises NotImplementedError."""
     # Create test file
     test_file = tmp_path / "file.txt"
     test_file.write_text("hello")
@@ -182,6 +182,7 @@ def test_reader_into_size_table_not_implemented(tmp_path):
 
     # Should raise NotImplementedError
     with pytest.raises(
-        NotImplementedError, match="Size table not supported for single-row Reader"
+        NotImplementedError,
+        match="Size table not supported for single-row FileRowReader",
     ):
         reader.into_size_table()

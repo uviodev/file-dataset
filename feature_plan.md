@@ -1,34 +1,39 @@
-# Task 1: Extract S3 Utilities Module
-**Status:** Not Started
-**Priority:** High
-**Dependencies:** None
+# Task 2: Rename Reader Class
 
-**Summary:** Extract S3-related helper functions into a dedicated module for better code organization.
+**Status:** Not Started
+**Priority:** Medium
+**Dependencies:** Task 1 (S3 utilities extraction)
+
+**Summary:** Rename `core.Reader` class to `core.FileRowReader` for clarity.
 
 **Description:**
-Move s3-related helper functions like `parse_url` from their current locations into a separate `s3_utils.py` file. This will improve code organization by centralizing S3-specific utilities and making them easier to test and maintain independently.
+The class `core.Reader` should be renamed to `core.FileRowReader` to better reflect its purpose of reading individual file rows. This change requires updating all references in tests and documentation to maintain consistency.
 
 **High-Level Test Descriptions:**
-- Test `parse_url` function with various S3 URL formats (valid and invalid)
-- Test S3 URL validation edge cases (empty strings, malformed URLs, non-S3 URLs)
-- Integration tests to ensure existing functionality still works after the move
-- Test import paths to ensure S3 utilities are accessible from expected locations
+- Test that `FileRowReader` class maintains all functionality of the original `Reader` class
+- Test import statements and public API access to ensure no breaking changes
+- Test class instantiation and method calls with the new name
+- Regression tests to verify all existing Reader functionality works with new class name
 
 ## Implementation Plan
 
-Based on analyzing the codebase, I found two S3-related functions in `src/file_dataset/core.py`:
+Based on analyzing the codebase:
 
-1. `_parse_s3_url(url: str)` - line 20-32: Parses S3 URL into bucket and key
-2. `_is_s3_url(path: str | Path)` - line 35-44: Checks if path is an S3 URL
+1. `core.Reader` class (line 23 in core.py) needs to be renamed to `FileRowReader`
+2. All references to `Reader` in core.py need to be updated to `FileRowReader`
+3. The `reader()` function should still return `FileRowReader` but the public API should remain the same
+4. Tests that instantiate or reference `Reader` directly need to be updated
+5. The import in `__init__.py` may need updating to maintain public API
 
 **Code Changes:**
-1. Create `src/file_dataset/s3_utils.py` with these functions (removing leading underscore to make them public)
-2. Update `src/file_dataset/core.py` to import from s3_utils
-3. Update any tests that might directly import these functions
-4. Add comprehensive tests for the S3 utilities
+1. Rename the `Reader` class to `FileRowReader` in `src/file_dataset/core.py`
+2. Update all internal references within core.py
+3. Update tests that directly import or use the `Reader` class
+4. Verify public API through `__init__.py` remains unchanged
+5. Add tests to verify the new class name works correctly
 
 **Testing:**
-- Test `parse_s3_url` with valid URLs: `s3://bucket/key`, `s3://bucket/`, `s3://bucket`
-- Test with invalid URLs: `http://example.com`, `s3:/bucket`, empty strings
-- Test `is_s3_url` with various path types including Path objects
-- Integration tests to ensure all existing functionality continues to work
+- Test that all existing Reader functionality works with FileRowReader
+- Test that the reader() function returns FileRowReader instances
+- Test import paths and public API access
+- Regression tests to ensure no functionality is broken

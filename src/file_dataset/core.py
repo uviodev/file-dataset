@@ -17,13 +17,13 @@ from .s3_utils import is_s3_url, parse_s3_url
 logger = logging.getLogger(__name__)
 
 
-class Reader:
+class FileRowReader:
     """Handles reading files from local filesystem with context manager support."""
 
     def __init__(
         self, files_dict: dict[str, str | Path], options: Options | None = None
     ) -> None:
-        """Initialize Reader with files dictionary.
+        """Initialize FileRowReader with files dictionary.
 
         Args:
             files_dict: Dictionary mapping filenames to their source paths
@@ -48,7 +48,7 @@ class Reader:
             return f"Invalid S3 URL format: {source_str}"
 
         bucket, key = parsed
-        if not key:  # Reader needs a key to read a file
+        if not key:  # FileRowReader needs a key to read a file
             return f"Invalid S3 URL format: {source_str}"
 
         # Check if options are provided for S3
@@ -154,9 +154,11 @@ class Reader:
             head: Limit to first N rows (not applicable for single Reader)
 
         Raises:
-            NotImplementedError: Size table not supported for single-row Reader
+            NotImplementedError: Size table not supported for single-row FileRowReader
         """
-        raise NotImplementedError("Size table not supported for single-row Reader")
+        raise NotImplementedError(
+            "Size table not supported for single-row FileRowReader"
+        )
 
     def into_blob_table(self, head: int | None = None) -> pa.Table:
         """Create PyArrow table with file contents as binary data.
@@ -165,9 +167,11 @@ class Reader:
             head: Limit to first N rows (not applicable for single Reader)
 
         Raises:
-            NotImplementedError: Blob table not supported for single-row Reader
+            NotImplementedError: Blob table not supported for single-row FileRowReader
         """
-        raise NotImplementedError("Blob table not supported for single-row Reader")
+        raise NotImplementedError(
+            "Blob table not supported for single-row FileRowReader"
+        )
 
 
 def reader(
@@ -175,8 +179,8 @@ def reader(
     row: dict[str, str | Path] | None = None,
     dataframe: pd.DataFrame | None = None,
     options: Options | None = None,
-) -> "Reader | FileDataFrameReader":
-    """Create a Reader instance for the given files or DataFrame.
+) -> "FileRowReader | FileDataFrameReader":
+    """Create a FileRowReader instance for the given files or DataFrame.
 
     Args:
         row: Dictionary mapping filenames to their source paths (keyword-only)
@@ -184,7 +188,7 @@ def reader(
         options: Optional Options instance for S3 operations (keyword-only)
 
     Returns:
-        Reader or FileDataFrameReader instance
+        FileRowReader or FileDataFrameReader instance
 
     Raises:
         ValueError: If both row and dataframe are provided, or if neither is provided
@@ -201,7 +205,7 @@ def reader(
     # Return appropriate reader
     if dataframe is not None:
         return FileDataFrameReader(dataframe, options)
-    return Reader(row, options)
+    return FileRowReader(row, options)
 
 
 def _validate_source_files(row: dict[str, str | Path | None]) -> dict[str, str]:
@@ -528,8 +532,8 @@ class FileDataFrameReader:
             if "id" in row_dict:
                 del row_dict["id"]
 
-            # Create Reader for this row
-            row_reader = Reader(row_dict, self.options)
+            # Create FileRowReader for this row
+            row_reader = FileRowReader(row_dict, self.options)
 
             # Try to process this row
             try:
