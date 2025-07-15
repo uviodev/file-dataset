@@ -1,68 +1,59 @@
-# Task 1: Create Core File Operations Library
+# Task 2: Add File Size and Content Reading APIs
 
 ## Summary
-Create a new library `_core_file.py` that centralizes all file operations (copy, read) with support for both local and S3 paths. This will provide a unified interface for file operations across the codebase.
+Extend `_core_file.py` with functions to read file sizes and contents efficiently for both local and S3 files. These will support batch operations on multiple files.
+
+## Implementation Notes
+- Create high-level APIs:
+  - `read_file_sizes(files: Mapping[str, str | Path], s3_options: S3Options) -> Mapping[str, int]`
+  - `read_file_contents(files: Mapping[str, str | Path], s3_options: S3Options) -> Mapping[str, bytes]`
+- Create low-level helpers:
+  - `_read_file_size(path: str | Path, s3_options: S3Options) -> int`
+    - Use os.path.getsize() for local files
+    - Use HeadObject for S3 files
+  - `_read_file_contents(path: str | Path, s3_options: S3Options) -> bytes`
+    - Use open/read for local files
+    - Use GetObject for S3 files
+- Refactor existing code:
+  - `into_size_table()` to use `read_file_sizes()`
+  - `into_blob_table()` to use `read_file_contents()`
+
+## Testing (High Level)
+- Test reading sizes/contents from local and S3 files
+- Test batch operations with mixed local/S3 paths
+- Test error cases: missing files, access denied
+- Verify memory efficiency with large files
+- Test that refactored table functions maintain compatibility
 
 ## Implementation Plan
 
-### 1. Understand Current Codebase
-- Examine existing writer module to understand `write_files()` implementation
-- Examine existing reader module to understand `into_temp_dir()` implementation
-- Understand S3Options structure and usage
-- Identify all file operation patterns currently used
+### 1. Analyze Current Implementation
+- Look at how `into_size_table()` currently reads file sizes
+- Look at how `into_blob_table()` currently reads file contents
+- Understand the error handling patterns they use
 
-### 2. Create _core_file.py Module
-- Implement `_do_single_copy(src: str | Path, dst: str | Path, s3_options: S3Options)`:
-  - Parse source and destination to determine if they are S3 or local paths
-  - Handle all four combinations: local→local, local→S3, S3→local, S3→S3
-  - Use shutil.copy2() for local operations
-  - Use boto3 S3 client for S3 operations
+### 2. Implement Low-Level Functions
+- `_read_file_size()`: Single file size reading
+- `_read_file_contents()`: Single file content reading
+- Both should handle local and S3 paths
 
-- Implement `do_copy(copies: list[tuple[str | Path, str | Path]], s3_options: S3Options)`:
-  - Validate all source paths exist
-  - Validate all destination paths are unique
-  - Check that s3_options is not None when S3 paths are involved
-  - Execute copies sequentially using `_do_single_copy`
-  - Provide clear error messages for validation failures
+### 3. Implement High-Level Batch Functions
+- `read_file_sizes()`: Batch size reading with error collection
+- `read_file_contents()`: Batch content reading with error collection
+- Use similar error handling pattern as `do_copy()` with FileDatasetError
 
-### 3. Refactor Existing Code
-- Update writer module's `write_files()` to use `do_copy()`
-- Update reader module's `into_temp_dir()` to use `do_copy()`
-- Ensure backwards compatibility is maintained
+### 4. Refactor Existing Code
+- Update `into_size_table()` in the reader module
+- Update `into_blob_table()` in the reader module
+- Ensure backwards compatibility
 
-## Testing
-
-### Test Cases
-1. **Local to Local Copy**
-   - Create test file
-   - Copy to new location
-   - Verify content matches
-
-2. **Local to S3 Copy**
-   - Create local test file
-   - Copy to mocked S3 bucket
-   - Verify file exists in S3 with correct content
-
-3. **S3 to Local Copy**
-   - Put test file in mocked S3 bucket
-   - Copy to local temp directory
-   - Verify content matches
-
-4. **S3 to S3 Copy**
-   - Put test file in mocked S3 bucket
-   - Copy to different S3 location
-   - Verify copy exists with correct content
-
-5. **Validation Tests**
-   - Non-existent source file → should raise error
-   - Duplicate destinations → should raise error
-   - S3 path with None s3_options → should raise error
-   - Empty copies list → should succeed
-
-6. **Integration Tests**
-   - Test refactored writer still works correctly
-   - Test refactored reader still works correctly
-   - Test with multiple files in batch operations
-
-## Questions/Clarifications Needed
-None - the task is clear and ready to implement.
+### 5. Testing Strategy
+Following red-green refactor:
+1. Write test for reading local file size → implement
+2. Write test for reading S3 file size → implement
+3. Write test for batch size reading → implement
+4. Write test for reading local file content → implement
+5. Write test for reading S3 file content → implement
+6. Write test for batch content reading → implement
+7. Write tests for error cases → implement error handling
+8. Test refactored table functions maintain compatibility

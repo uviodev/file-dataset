@@ -28,7 +28,7 @@ Create a new library `_core_file.py` that centralizes all file operations (copy,
 - Mock S3 operations using moto
 - Verify that refactored writer and reader still work correctly
 
-## Task 2: Add File Size and Content Reading APIs
+## Task 2: Add File Size and Content Reading APIs ✓
 
 ### Summary
 Extend `_core_file.py` with functions to read file sizes and contents efficiently for both local and S3 files. These will support batch operations on multiple files.

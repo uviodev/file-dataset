@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 import pyarrow as pa
 
-from ._core_file import do_copy
+from ._core_file import copy_each_file, read_each_file_contents, read_each_file_size
 from .exceptions import FileDatasetError
 from .s3_options import S3Options
 from .s3_utils import is_s3_url, parse_s3_url
@@ -139,10 +139,10 @@ class FileRowReader:
 
             # Perform all copies at once
             try:
-                do_copy(copies, s3_options=self.options)
+                copy_each_file(copies, s3_options=self.options)
             except FileDatasetError as e:
                 # Extract file errors from the exception
-                # do_copy uses index as key, we need to map back to filenames
+                # copy_each_file uses index as key, we need to map back to filenames
                 file_errors = {}
                 filenames = list(self.files_dict.keys())
                 for i, filename in enumerate(filenames):
@@ -253,34 +253,6 @@ class FileDataFrameReader:
         """
         yield from self.into_temp_dir()
 
-    def _get_file_size(self, file_path: str) -> int:
-        """Get file size for local or S3 file.
-
-        Args:
-            file_path: Path to file (local or S3 URL)
-
-        Returns:
-            File size in bytes
-
-        Raises:
-            FileNotFoundError: If file doesn't exist
-            ValueError: If S3 URL is invalid or options missing
-            Exception: For other errors accessing file
-        """
-        if is_s3_url(file_path):
-            if self.options is None:
-                msg = "No S3 options"
-                raise ValueError(msg)
-
-            bucket, key = parse_s3_url(file_path)
-            if not bucket or not key:
-                msg = "Invalid S3 URL"
-                raise ValueError(msg)
-
-            response = self.options.s3_client.head_object(Bucket=bucket, Key=key)
-            return response["ContentLength"]
-        return Path(file_path).stat().st_size
-
     def _process_row_for_sizes(
         self, row_id: str, row_dict: dict
     ) -> dict[str, str | int]:
@@ -294,19 +266,20 @@ class FileDataFrameReader:
             Dictionary with row_data and any file errors
         """
         row_data = {"id": row_id}
-        file_errors = {}
 
-        for filename, file_path in row_dict.items():
-            if file_path is None:
-                continue  # Skip None values (optional files)
+        # Filter out None values
+        files_to_read = {
+            filename: str(file_path)
+            for filename, file_path in row_dict.items()
+            if file_path is not None
+        }
 
-            try:
-                file_size = self._get_file_size(str(file_path))
-                row_data[filename] = file_size
-            except (FileNotFoundError, ValueError) as e:
-                file_errors[filename] = str(e)
-            except Exception as e:  # noqa: BLE001
-                file_errors[filename] = f"Failed to get file size: {e}"
+        if not files_to_read:
+            return row_data
+
+        # Make a single call to read all file sizes
+        sizes, file_errors = read_each_file_size(files_to_read, s3_options=self.options)
+        row_data.update(sizes)
 
         # Log errors if any
         if file_errors:
@@ -405,34 +378,6 @@ class FileDataFrameReader:
         # Convert to PyArrow table with explicit schema
         return pa.table(result_df, schema=schema)
 
-    def _get_file_content(self, file_path: str) -> bytes:
-        """Get file content for local or S3 file.
-
-        Args:
-            file_path: Path to file (local or S3 URL)
-
-        Returns:
-            File content as bytes
-
-        Raises:
-            FileNotFoundError: If file doesn't exist
-            ValueError: If S3 URL is invalid or options missing
-            Exception: For other errors accessing file
-        """
-        if is_s3_url(file_path):
-            if self.options is None:
-                msg = "No S3 options"
-                raise ValueError(msg)
-
-            bucket, key = parse_s3_url(file_path)
-            if not bucket or not key:
-                msg = "Invalid S3 URL"
-                raise ValueError(msg)
-
-            response = self.options.s3_client.get_object(Bucket=bucket, Key=key)
-            return response["Body"].read()
-        return Path(file_path).read_bytes()
-
     def _process_row_for_blobs(
         self, row_id: str, row_dict: dict
     ) -> dict[str, str | bytes]:
@@ -446,19 +391,22 @@ class FileDataFrameReader:
             Dictionary with row_data and any file errors
         """
         row_data = {"id": row_id}
-        file_errors = {}
 
-        for filename, file_path in row_dict.items():
-            if file_path is None:
-                continue  # Skip None values (optional files)
+        # Filter out None values
+        files_to_read = {
+            filename: str(file_path)
+            for filename, file_path in row_dict.items()
+            if file_path is not None
+        }
 
-            try:
-                file_content = self._get_file_content(str(file_path))
-                row_data[filename] = file_content
-            except (FileNotFoundError, ValueError) as e:
-                file_errors[filename] = str(e)
-            except Exception as e:  # noqa: BLE001
-                file_errors[filename] = f"Failed to get file content: {e}"
+        if not files_to_read:
+            return row_data
+
+        # Make a single call to read all file contents
+        contents, file_errors = read_each_file_contents(
+            files_to_read, s3_options=self.options
+        )
+        row_data.update(contents)
 
         # Log errors if any
         if file_errors:

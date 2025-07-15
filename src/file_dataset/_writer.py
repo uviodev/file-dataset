@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ._core_file import do_copy
+from ._core_file import copy_each_file
 from .exceptions import FileDatasetError
 from .s3_options import S3Options
 from .s3_utils import is_s3_url, parse_s3_url
@@ -53,7 +53,7 @@ def _copy_files_to_destination(
     result: dict[str, Path | None] = {}
     file_errors: dict[str, str] = {}
 
-    # Prepare copies for do_copy
+    # Prepare copies for copy_each_file
     copies = []
     file_map = {}  # Track which copy corresponds to which filename
 
@@ -70,13 +70,13 @@ def _copy_files_to_destination(
     # Perform all copies at once
     if copies:
         try:
-            do_copy(copies, s3_options=None)
+            copy_each_file(copies, s3_options=None)
             # All copies succeeded
             for _dest_str, (filename, dest_path) in file_map.items():
                 result[filename] = dest_path
         except FileDatasetError as e:
             # Extract file errors from the exception
-            # do_copy uses index as key, we need to map back to filenames
+            # copy_each_file uses index as key, we need to map back to filenames
             for i, (_, (filename, _)) in enumerate(file_map.items()):
                 if str(i) in e.file_errors:
                     file_errors[filename] = e.file_errors[str(i)]
@@ -106,7 +106,7 @@ def _upload_files_to_s3(
     """
     result = {}
 
-    # Prepare copies for do_copy
+    # Prepare copies for copy_each_file
     copies = []
     file_map = {}  # Track which copy corresponds to which filename
 
@@ -125,13 +125,13 @@ def _upload_files_to_s3(
     # Perform all uploads at once
     if copies:
         try:
-            do_copy(copies, s3_options=options)
+            copy_each_file(copies, s3_options=options)
             # All uploads succeeded
             for s3_url, filename in file_map.items():
                 result[filename] = s3_url
         except FileDatasetError as e:
             # Extract file errors from the exception
-            # do_copy uses index as key, we need to map back to filenames
+            # copy_each_file uses index as key, we need to map back to filenames
             upload_errors = {}
             for i, (_, filename) in enumerate(file_map.items()):
                 if str(i) in e.file_errors:

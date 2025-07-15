@@ -1,6 +1,7 @@
 """Core file operations for file-dataset."""
 
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
 
 from botocore.exceptions import ClientError
@@ -58,7 +59,7 @@ def _validate_unique_destinations(
     return file_errors
 
 
-def do_copy(
+def copy_each_file(
     copies: list[tuple[str | Path, str | Path]], s3_options: S3Options | None
 ) -> None:
     """Copy files from source to destination.
@@ -140,3 +141,123 @@ def _copy_single_file(
         # Use copy for S3 to S3
         copy_source = {"Bucket": src_bucket, "Key": src_key}
         s3_client.copy(copy_source, dst_bucket, dst_key)
+
+
+def _read_file_size(path: str | Path, s3_options: S3Options | None) -> int:
+    """Read the size of a single file.
+
+    Args:
+        path: File path (local or S3)
+        s3_options: S3 options for S3 operations
+
+    Returns:
+        File size in bytes
+
+    Raises:
+        OSError: For local file errors
+        ClientError: For S3 errors
+    """
+    path_str = str(path)
+
+    if is_s3_url(path_str):
+        # S3 file
+        bucket, key = parse_s3_url(path_str)
+        s3_client = s3_options.s3_client
+        response = s3_client.head_object(Bucket=bucket, Key=key)
+        return response["ContentLength"]
+    # Local file
+    return Path(path_str).stat().st_size
+
+
+def read_each_file_size(
+    files: Mapping[str, str | Path], s3_options: S3Options | None = None
+) -> tuple[Mapping[str, int], Mapping[str, str]]:
+    """Read sizes of multiple files.
+
+    Args:
+        files: Mapping of identifier to file path
+        s3_options: S3 options for S3 operations
+
+    Returns:
+        Tuple of (successful_results, errors) where:
+        - successful_results: Mapping of identifier to file size in bytes
+        - errors: Mapping of identifier to error message
+    """
+    if not files:
+        return {}, {}
+
+    # Check if we need S3 options
+    needs_s3 = any(is_s3_url(str(path)) for path in files.values())
+    if needs_s3 and s3_options is None:
+        s3_options = S3Options.default()
+
+    result = {}
+    errors = {}
+
+    for key, path in files.items():
+        try:
+            result[key] = _read_file_size(path, s3_options)
+        except (OSError, ClientError) as e:
+            errors[key] = str(e)
+
+    return result, errors
+
+
+def _read_file_contents(path: str | Path, s3_options: S3Options | None) -> bytes:
+    """Read the contents of a single file.
+
+    Args:
+        path: File path (local or S3)
+        s3_options: S3 options for S3 operations
+
+    Returns:
+        File contents as bytes
+
+    Raises:
+        OSError: For local file errors
+        ClientError: For S3 errors
+    """
+    path_str = str(path)
+
+    if is_s3_url(path_str):
+        # S3 file
+        bucket, key = parse_s3_url(path_str)
+        s3_client = s3_options.s3_client
+        response = s3_client.get_object(Bucket=bucket, Key=key)
+        return response["Body"].read()
+    # Local file
+    return Path(path_str).read_bytes()
+
+
+def read_each_file_contents(
+    files: Mapping[str, str | Path], s3_options: S3Options | None = None
+) -> tuple[Mapping[str, bytes], Mapping[str, str]]:
+    """Read contents of multiple files.
+
+    Args:
+        files: Mapping of identifier to file path
+        s3_options: S3 options for S3 operations
+
+    Returns:
+        Tuple of (successful_results, errors) where:
+        - successful_results: Mapping of identifier to file contents as bytes
+        - errors: Mapping of identifier to error message
+    """
+    if not files:
+        return {}, {}
+
+    # Check if we need S3 options
+    needs_s3 = any(is_s3_url(str(path)) for path in files.values())
+    if needs_s3 and s3_options is None:
+        s3_options = S3Options.default()
+
+    result = {}
+    errors = {}
+
+    for key, path in files.items():
+        try:
+            result[key] = _read_file_contents(path, s3_options)
+        except (OSError, ClientError) as e:
+            errors[key] = str(e)
+
+    return result, errors
