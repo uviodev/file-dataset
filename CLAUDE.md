@@ -130,31 +130,49 @@ The pre-commit configuration includes:
 
 The library provides several key components:
 
-1. **Reader API** (`file_dataset.reader()`)
+1. **Core File Operations** (`file_dataset._core_file`)
+   - Unified interface for local and S3 file operations
+   - Batch operations: `copy_each_file()`, `read_each_file_size()`, `read_each_file_contents()`, `validate_each_file()`
+   - Parallel execution support with configurable thread pools
+   - Uses S3Transfer API for multipart uploads, automatic retries, and optimized transfers
+   - Returns both successful results and errors for graceful partial failure handling
+
+2. **Reader API** (`file_dataset.file_dataframe_reader()`)
    - Downloads S3 files to temporary directories via `into_temp_dir()`
    - Loads data into PyArrow tables via `into_blob_table()` or `into_size_table()`
+   - Leverages core file operations for parallel processing
    - Supports both single rows and batch operations
 
-2. **Writer API** (`file_dataset.write_files()`)
+3. **Writer API** (`file_dataset.write_files()`)
    - Uploads local files to S3 with user-defined IDs
    - Supports both S3 and local path destinations
+   - Uses batch operations from core file module
    - Returns mapping of filenames to their final locations
 
-3. **Pipeline Class** (`file_dataset.Pipeline`)
+4. **Pipeline Class** (`file_dataset.Pipeline`)
    - Combines read → process → write workflow
    - Processes pandas DataFrames row by row
    - Pickle-able for use with Ray's `map_batches()`
    - Drops failed rows rather than failing entire batch
 
-4. **Ray Integration**
+5. **Ray Integration**
    - `file_dataset.ray.blob_reader()` for loading file datasets into Ray
+   - Automatic parallelism configuration based on number of file columns
    - Pipelines work seamlessly with `ray.data.Dataset.map_batches()`
-   - Optimized for small dataset metadata (URLs) with large underlying files
+   - Optimized credential handling to minimize EC2 metadata server load
 
-5. **Options Management** (`file_dataset.Options`)
+6. **S3Options Management** (`file_dataset.S3Options`)
    - Handles S3 credentials and client configuration
-   - Serializable for distributed computing
-   - Thread-safe lazy initialization of boto3 clients
+   - Configurable local parallelism with thread pool management
+   - S3Transfer configuration for optimized uploads/downloads
+   - Thread-safe lazy initialization with proper locking
+   - Frozen credentials caching to reduce AWS API calls
+   - Fully serializable for distributed computing
+
+7. **File DataFrame Utilities** (`file_dataset.file_dataframe`)
+   - Validation functions for file columns and ID uniqueness
+   - Centralized DataFrame validation logic
+   - Helper functions for identifying file columns by extension
 
 ### Key Design Principles
 
